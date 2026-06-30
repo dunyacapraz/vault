@@ -24,11 +24,9 @@
                     {% if trip.description %}<p class="text-stone-600 text-sm mt-2 max-w-xl">{{ trip.description }}</p>{% endif %}
                 </div>
             </div>
-            {% if trip.created_by == user.username %}
             <button onclick="confirmDeleteTrip()" class="btn-press text-red-500 hover:bg-red-50 h-10 w-10 rounded-lg flex items-center justify-center transition-colors shrink-0" title="Albümü Sil">
                 <i class="fa-regular fa-trash-can"></i>
             </button>
-            {% endif %}
         </div>
     </header>
 
