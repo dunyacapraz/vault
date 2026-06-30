@@ -33,22 +33,24 @@
                 <h2 class="font-display text-xl font-semibold flex items-center gap-2">
                     <i class="fa-solid fa-calendar-star text-[var(--amber)]"></i> Yaklaşan Etkinlikler
                 </h2>
-                <button onclick="openEventModal()" class="btn-press text-sm text-[var(--amber-deep)] hover:bg-amber-50 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
+                <button onclick="openEventModal()" class="btn-press text-sm text-[var(--amber-deep)] hover:bg-stone-100 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
                     <i class="fa-solid fa-plus"></i> Etkinlik Ekle
                 </button>
             </div>
             <div class="flex gap-3 overflow-x-auto pb-2 stagger">
                 {% for ev in all_events %}
-                <div class="shrink-0 w-64 bg-[var(--ink)] text-white rounded-2xl p-4 relative overflow-hidden">
-                    <div class="absolute -top-6 -right-6 h-20 w-20 rounded-full fab-amber opacity-20"></div>
-                    <p class="text-[10px] uppercase tracking-widest text-amber-300 font-semibold">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</p>
-                    <h3 class="font-display font-semibold mt-1 truncate">{{ ev.title }}</h3>
-                    {% if ev.location %}<p class="text-white/50 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
-                    <div class="flex items-center justify-between mt-3">
-                        <span class="text-xs text-white/60 countdown-chip" data-target="{{ ev.date }}T{{ ev.time or '00:00' }}">—</span>
-                        {% if ev.created_by == user.username %}
-                        <button onclick="deleteEvent('{{ ev.id }}')" class="text-white/40 hover:text-red-400 text-xs"><i class="fa-regular fa-trash-can"></i></button>
-                        {% endif %}
+                <div class="shrink-0 w-64 bg-white border border-[var(--line)] rounded-2xl overflow-hidden relative">
+                    <div class="absolute left-0 top-0 bottom-0 w-1 fab-amber"></div>
+                    <div class="pl-4 pr-4 py-4">
+                        <p class="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-400">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</p>
+                        <h3 class="font-display font-semibold mt-1 truncate">{{ ev.title }}</h3>
+                        {% if ev.location %}<p class="text-stone-500 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
+                        <div class="flex items-center justify-between mt-3">
+                            <span class="font-mono text-xs text-[var(--amber-deep)] font-medium countdown-chip" data-target="{{ ev.date }}T{{ ev.time or '00:00' }}">—</span>
+                            {% if ev.created_by == user.username %}
+                            <button onclick="deleteEvent('{{ ev.id }}')" class="text-stone-300 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
