@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}Vault | {{ trip.title }}{% endblock %}
+{% block content %}
+<div class="min-h-screen">
+    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-20 px-5 sm:px-8 py-5 border-b border-[var(--line)] anim-fade">
+        <div class="max-w-6xl mx-auto flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <a href="/" class="btn-press h-10 w-10 rounded-lg flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors shrink-0 mt-0.5">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="font-display text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">{{ trip.title }}</h1>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 mt-1">
+                        {% if trip.date %}<span><i class="fa-regular fa-calendar mr-1"></i>{{ trip.date }}</span>{% endif %}
+                        <span><i class="fa-regular fa-images mr-1"></i>{{ media|length }} anı</span>
+                        <span class="flex items-center gap-1">
+                            <span class="h-4 w-4 rounded-full inline-flex items-center justify-center text-white text-[8px] font-bold"
+                                  style="background-color: {{ users.get(trip.created_by, {}).get('avatar_color', '#999') }}">
+                                {{ users.get(trip.created_by, {}).get('name', trip.created_by)[0] }}
+                            </span>
+                            {{ users.get(trip.created_by, {}).get('name', trip.created_by) }} oluşturdu
+                        </span>
+                    </div>
+                    {% if trip.description %}<p class="text-stone-600 text-sm mt-2 max-w-xl">{{ trip.description }}</p>{% endif %}
+                </div>
+            </div>
+            {% if trip.created_by == user.username %}
+            <button onclick="confirmDeleteTrip()" class="btn-press text-red-500 hover:bg-red-50 h-10 w-10 rounded-lg flex items-center justify-center transition-colors shrink-0" title="Albümü Sil">
+                <i class="fa-regular fa-trash-can"></i>
+            </button>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="px-5 sm:px-8 py-8 max-w-6xl mx-auto">
+        <!-- Yükleme alanı -->
+        <div id="dropzone"
+             class="anim-fade-up border-2 border-dashed border-stone-300 rounded-2xl bg-white/60 p-8 text-center mb-9 transition-colors cursor-pointer"
+             onclick="document.getElementById('file-input').click()">
+            <input type="file" id="file-input" class="hidden" multiple accept="image/*,video/*" onchange="handleFiles(this.files)">
+            <i class="fa-solid fa-cloud-arrow-up text-3xl text-[var(--amber)] mb-3"></i>
+            <p class="font-medium text-stone-700">Fotoğraf veya video sürükle, ya da tıkla</p>
+            <p class="text-xs text-stone-400 mt-1">PNG, JPG, GIF, WEBP, MP4, MOV, AVI, WEBM</p>
+            <div id="upload-progress" class="hidden mt-4 max-w-xs mx-auto">
+                <div class="h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                    <div id="upload-bar" class="h-full fab-amber transition-all duration-300" style="width:0%"></div>
+                </div>
+                <p id="upload-status" class="text-xs text-stone-500 mt-2"></p>
+            </div>
+        </div>
+
+        {% if not media %}
+        <div class="anim-fade-up text-center py-20 border-2 border-dashed border-stone-200 rounded-3xl bg-white/40">
+            <i class="fa-regular fa-image text-stone-300 text-5xl mb-4"></i>
+            <p class="text-stone-500 font-medium">Bu albümde henüz anı yok.</p>
+            <p class="text-stone-400 text-sm mt-1">İlk fotoğrafı veya videoyu yukarıdan ekle.</p>
+        </div>
+        {% else %}
+        <div class="stagger grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5" id="gallery">
+            {% for item in media %}
+            {% set tilt = ((loop.index0 % 5) - 2) %}
+            <div class="polaroid anim-pin bg-white p-2 pb-3 rounded-lg shadow-sm border border-[var(--line)] cursor-pointer"
+                 style="--tilt: {{ tilt }}deg; transform: rotate({{ tilt }}deg);"
+                 onclick="openLightbox({{ loop.index0 }})">
+                <div class="relative aspect-square bg-stone-200 rounded overflow-hidden">
+                    {% if item.type == 'video' %}
+                    <video src="/uploads/{{ trip.id }}/{{ item.filename }}" class="w-full h-full object-cover" muted></video>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <i class="fa-solid fa-circle-play text-white text-2xl drop-shadow"></i>
+                    </div>
+                    {% else %}
+                    <img src="/uploads/{{ trip.id }}/{{ item.filename }}" alt="" class="w-full h-full object-cover">
+                    {% endif %}
+                </div>
+                <div class="flex items-center justify-between mt-2 px-0.5">
+                    <span class="h-4 w-4 rounded-full inline-flex items-center justify-center text-white text-[8px] font-bold"
+                          style="background-color: {{ users.get(item.uploaded_by, {}).get('avatar_color', '#999') }}"
+                          title="{{ users.get(item.uploaded_by, {}).get('name', item.uploaded_by) }}">
+                        {{ users.get(item.uploaded_by, {}).get('name', item.uploaded_by)[0] }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </main>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="hidden fixed inset-0 bg-black/90 z-50 items-center justify-center px-4">
+    <button onclick="closeLightbox()" class="absolute top-5 right-5 text-white/80 hover:text-white h-10 w-10 flex items-center justify-center text-xl">
+        <i class="fa-solid fa-xmark"></i>
+    </button>
+    <button onclick="navLightbox(-1)" class="absolute left-3 sm:left-6 text-white/70 hover:text-white h-12 w-12 flex items-center justify-center text-2xl">
+        <i class="fa-solid fa-chevron-left"></i>
+    </button>
+    <button onclick="navLightbox(1)" class="absolute right-3 sm:right-6 text-white/70 hover:text-white h-12 w-12 flex items-center justify-center text-2xl">
+        <i class="fa-solid fa-chevron-right"></i>
+    </button>
+
+    <div class="anim-scale max-w-4xl w-full flex flex-col items-center" id="lightbox-content">
+        <div id="lightbox-media-wrap" class="max-h-[75vh] flex items-center justify-center"></div>
+        <div class="flex items-center justify-between w-full mt-4 text-white/80 text-sm px-2">
+            <span id="lightbox-uploader" class="flex items-center gap-2"></span>
+            <div class="flex items-center gap-3">
+                <a id="lightbox-download" href="#" download class="hover:text-white" title="İndir"><i class="fa-solid fa-download"></i></a>
+                <button id="lightbox-delete" onclick="deleteCurrentMedia()" class="hover:text-red-400" title="Sil"><i class="fa-regular fa-trash-can"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const TRIP_ID = "{{ trip.id }}";
+    const TRIP_TITLE = {{ trip.title|tojson }};
+    const CURRENT_USER = "{{ user.username }}";
+    const TRIP_CREATOR = "{{ trip.created_by }}";
+    const MEDIA = {{ media|tojson }};
+    const USERS_MAP = {{ users|tojson }};
+    let lightboxIndex = 0;
+
+    // --- Yükleme (drag & drop + click) ---
+    const dropzone = document.getElementById('dropzone');
+    ['dragenter', 'dragover'].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dropzone-active');
+        });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dropzone-active');
+        });
+    });
+    dropzone.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    });
+
+    async function handleFiles(fileList) {
+        if (!fileList.length) return;
+        const formData = new FormData();
+        Array.from(fileList).forEach(f => formData.append('files', f));
+
+        const progressWrap = document.getElementById('upload-progress');
+        const bar = document.getElementById('upload-bar');
+        const status = document.getElementById('upload-status');
+        progressWrap.classList.remove('hidden');
+        status.textContent = `${fileList.length} dosya yükleniyor...`;
+        bar.style.width = '15%';
+
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `/api/trips/${TRIP_ID}/upload`);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const pct = Math.max(15, Math.round((e.loaded / e.total) * 100));
+                    bar.style.width = pct + '%';
+                }
+            };
+            xhr.onload = () => {
+                let data = {};
+                try { data = JSON.parse(xhr.responseText); } catch (e) {}
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    bar.style.width = '100%';
+                    status.textContent = 'Tamamlandı!';
+                    queueToast(`${(data.saved || []).length} anı eklendi`, 'success');
+                    setTimeout(() => window.location.reload(), 400);
+                } else {
+                    progressWrap.classList.add('hidden');
+                    showToast(data.message || 'Yükleme hatası', 'error');
+                }
+            };
+            xhr.onerror = () => {
+                progressWrap.classList.add('hidden');
+                showToast('Bağlantı hatası', 'error');
+            };
+            xhr.send(formData);
+        } catch (err) {
+            progressWrap.classList.add('hidden');
+            showToast('Yükleme hatası', 'error');
+        }
+    }
+
+    // --- Lightbox ---
+    function userLabel(username) {
+        const u = USERS_MAP[username];
+        return u ? u.name : username;
+    }
+
+    function openLightbox(index) {
+        lightboxIndex = index;
+        renderLightbox();
+        document.getElementById('lightbox').classList.remove('hidden');
+        document.getElementById('lightbox').classList.add('flex');
+    }
+
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.add('hidden');
+        document.getElementById('lightbox').classList.remove('flex');
+        document.getElementById('lightbox-media-wrap').innerHTML = '';
+    }
+
+    function navLightbox(dir) {
+        lightboxIndex = (lightboxIndex + dir + MEDIA.length) % MEDIA.length;
+        renderLightbox();
+    }
+
+    function renderLightbox() {
+        const item = MEDIA[lightboxIndex];
+        const wrap = document.getElementById('lightbox-media-wrap');
+        const url = `/uploads/${TRIP_ID}/${item.filename}`;
+        wrap.innerHTML = '';
+        let el;
+        if (item.type === 'video') {
+            el = document.createElement('video');
+            el.src = url; el.controls = true; el.autoplay = true;
+        } else {
+            el = document.createElement('img');
+            el.src = url;
+        }
+        el.className = 'anim-fade max-h-[75vh] max-w-full rounded-lg shadow-2xl';
+        wrap.appendChild(el);
+
+        document.getElementById('lightbox-uploader').innerHTML =
+            `<span class="h-5 w-5 rounded-full inline-flex items-center justify-center text-white text-[9px] font-bold" style="background-color:${(USERS_MAP[item.uploaded_by]||{}).avatar_color||'#999'}">${userLabel(item.uploaded_by)[0]}</span> ${userLabel(item.uploaded_by)} ekledi`;
+        document.getElementById('lightbox-download').href = url;
+
+        const deleteBtn = document.getElementById('lightbox-delete');
+        const canDelete = item.uploaded_by === CURRENT_USER || TRIP_CREATOR === CURRENT_USER;
+        deleteBtn.style.display = canDelete ? 'inline-flex' : 'none';
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('lightbox').classList.contains('hidden')) return;
+        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'ArrowLeft') navLightbox(-1);
+        if (e.key === 'ArrowRight') navLightbox(1);
+    });
+    document.getElementById('lightbox').addEventListener('click', (e) => {
+        if (e.target.id === 'lightbox') closeLightbox();
+    });
+
+    async function deleteCurrentMedia() {
+        const item = MEDIA[lightboxIndex];
+        if (!confirm('Bu anıyı silmek istediğine emin misin?')) return;
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/media/${item.filename}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                queueToast('Anı silindi', 'success');
+                window.location.reload();
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function confirmDeleteTrip() {
+        if (!confirm(`"${TRIP_TITLE}" albümünü ve içindeki tüm anıları silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                queueToast('Albüm silindi', 'success');
+                window.location.href = '/';
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+</script>
+{% endblock %}

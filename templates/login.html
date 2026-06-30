@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Vault | Giriş{% endblock %}
+{% block content %}
+<div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-6" style="background: radial-gradient(circle at 20% 20%, #f3e6cf 0%, var(--paper) 55%);">
+
+    {% if events %}
+    {% set next_event = events[0] %}
+    <div class="anim-fade-up w-full max-w-[400px] bg-[var(--ink)] text-white rounded-[24px] shadow-xl p-6 relative overflow-hidden">
+        <div class="absolute -top-8 -right-8 h-28 w-28 rounded-full fab-amber opacity-20"></div>
+        <p class="text-xs uppercase tracking-widest text-amber-300 font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-calendar-star"></i> Yaklaşan Etkinlik
+        </p>
+        <h3 class="font-display text-xl font-semibold mt-1.5">{{ next_event.title }}</h3>
+        {% if next_event.location %}
+        <p class="text-white/60 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ next_event.location }}</p>
+        {% endif %}
+
+        <div id="countdown" class="grid grid-cols-4 gap-2 mt-4" data-target="{{ next_event.date }}T{{ next_event.time or '00:00' }}">
+            <div class="bg-white/10 rounded-lg py-2.5 text-center">
+                <div class="font-display text-2xl font-semibold leading-none" id="cd-days">--</div>
+                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">gün</div>
+            </div>
+            <div class="bg-white/10 rounded-lg py-2.5 text-center">
+                <div class="font-display text-2xl font-semibold leading-none" id="cd-hours">--</div>
+                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">saat</div>
+            </div>
+            <div class="bg-white/10 rounded-lg py-2.5 text-center">
+                <div class="font-display text-2xl font-semibold leading-none" id="cd-mins">--</div>
+                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">dakika</div>
+            </div>
+            <div class="bg-white/10 rounded-lg py-2.5 text-center">
+                <div class="font-display text-2xl font-semibold leading-none" id="cd-secs">--</div>
+                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">saniye</div>
+            </div>
+        </div>
+
+        {% if events|length > 1 %}
+        <p class="text-white/40 text-[11px] mt-3">+ {{ events|length - 1 }} etkinlik daha — giriş yaptıktan sonra görebilirsin</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="anim-fade-up bg-white/90 backdrop-blur p-10 rounded-[28px] shadow-2xl w-full max-w-[400px] border border-[var(--line)]">
+        <div class="text-center mb-8">
+            <div class="h-16 w-16 fab-amber rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg ring-pulse">
+                <i class="fa-solid fa-vault text-white text-2xl"></i>
+            </div>
+            <h2 class="font-display text-3xl font-semibold tracking-tight">Vault</h2>
+            <p class="text-sm text-stone-500 mt-2">Sadece davetli arkadaşlara özel.</p>
+        </div>
+
+        <div id="error-msg" class="hidden bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4 border border-red-200 text-center anim-scale">
+            Hatalı kullanıcı adı veya şifre.
+        </div>
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Kullanıcı Adı</label>
+                <div class="relative">
+                    <i class="fa-regular fa-user absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="text" id="username" autocomplete="username"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="kullanıcı adını gir">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Şifre</label>
+                <div class="relative">
+                    <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="password" id="password" autocomplete="current-password"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="••••••••">
+                </div>
+            </div>
+            <button id="login-btn" onclick="checkLogin()"
+                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md mt-2 flex items-center justify-center gap-2">
+                <span id="login-btn-text">Giriş Yap</span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function checkLogin() {
+        const user = document.getElementById('username').value.trim();
+        const pass = document.getElementById('password').value;
+        const errorMsg = document.getElementById('error-msg');
+        const btn = document.getElementById('login-btn');
+        const btnText = document.getElementById('login-btn-text');
+
+        if (!user || !pass) {
+            errorMsg.textContent = 'Kullanıcı adı ve şifre gerekli.';
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                const data = await response.json().catch(() => ({}));
+                errorMsg.textContent = data.message || 'Kimlik doğrulama başarısız.';
+                errorMsg.classList.remove('hidden');
+                btn.disabled = false;
+                btnText.textContent = 'Giriş Yap';
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Bağlantı hatası, tekrar deneyin.';
+            errorMsg.classList.remove('hidden');
+            btn.disabled = false;
+            btnText.textContent = 'Giriş Yap';
+        }
+    }
+
+    document.getElementById('password').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') checkLogin();
+    });
+    document.getElementById('username').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') document.getElementById('password').focus();
+    });
+
+    // Yaklaşan etkinlik geri sayımı
+    const countdownEl = document.getElementById('countdown');
+    if (countdownEl) {
+        const target = new Date(countdownEl.dataset.target);
+        function tick() {
+            const diff = target - new Date();
+            const els = {
+                d: document.getElementById('cd-days'),
+                h: document.getElementById('cd-hours'),
+                m: document.getElementById('cd-mins'),
+                s: document.getElementById('cd-secs'),
+            };
+            if (diff <= 0) {
+                els.d.textContent = '0'; els.h.textContent = '0';
+                els.m.textContent = '0'; els.s.textContent = '0';
+                document.querySelector('#countdown').closest('div.anim-fade-up').querySelector('p.text-xs').innerHTML =
+                    '<i class="fa-solid fa-party-horn"></i> Etkinlik Başladı!';
+                clearInterval(timer);
+                return;
+            }
+            const days = Math.floor(diff / 86400000);
+            const hours = Math.floor((diff % 86400000) / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            els.d.textContent = days;
+            els.h.textContent = String(hours).padStart(2, '0');
+            els.m.textContent = String(mins).padStart(2, '0');
+            els.s.textContent = String(secs).padStart(2, '0');
+        }
+        tick();
+        const timer = setInterval(tick, 1000);
+    }
+</script>
+{% endblock %}
