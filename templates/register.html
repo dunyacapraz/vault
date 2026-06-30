@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Vault | Kayıt Ol{% endblock %}
+{% block content %}
+<div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-6" style="background: radial-gradient(circle at 20% 20%, #f3e6cf 0%, var(--paper) 55%);">
+
+    <div class="anim-fade-up bg-white/90 backdrop-blur p-10 rounded-[28px] shadow-2xl w-full max-w-[400px] border border-[var(--line)]">
+        <div class="text-center mb-8">
+            <div class="h-16 w-16 fab-amber rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg ring-pulse">
+                <i class="fa-solid fa-user-plus text-white text-2xl"></i>
+            </div>
+            <h2 class="font-display text-3xl font-semibold tracking-tight">Kayıt Ol</h2>
+            <p class="text-sm text-stone-500 mt-2">Katılmak için davet/referans kodu gerekli.</p>
+        </div>
+
+        <div id="error-msg" class="hidden bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4 border border-red-200 text-center anim-scale"></div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">İsim</label>
+                <div class="relative">
+                    <i class="fa-regular fa-id-card absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="text" id="reg-name" autocomplete="name"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="adın ve soyadın">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Kullanıcı Adı</label>
+                <div class="relative">
+                    <i class="fa-regular fa-user absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="text" id="reg-username" autocomplete="username"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="örn. ahmet">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Şifre</label>
+                <div class="relative">
+                    <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="password" id="reg-password" autocomplete="new-password"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="en az 4 karakter">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Referans Kodu</label>
+                <div class="relative">
+                    <i class="fa-solid fa-key absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"></i>
+                    <input type="text" id="reg-referral" autocomplete="off"
+                        class="w-full pl-10 pr-4 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none transition-all"
+                        placeholder="davet kodunu gir">
+                </div>
+            </div>
+            <button id="register-btn" onclick="doRegister()"
+                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md mt-2 flex items-center justify-center gap-2">
+                <span id="register-btn-text">Kayıt Ol</span>
+            </button>
+        </div>
+
+        <p class="text-center text-sm text-stone-500 mt-6">
+            Zaten hesabın var mı? <a href="/" class="text-[var(--amber-deep)] font-semibold hover:underline">Giriş yap</a>
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function doRegister() {
+        const name = document.getElementById('reg-name').value.trim();
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value;
+        const referral_code = document.getElementById('reg-referral').value.trim();
+        const errorMsg = document.getElementById('error-msg');
+        const btn = document.getElementById('register-btn');
+        const btnText = document.getElementById('register-btn-text');
+
+        if (!name || !username || !password || !referral_code) {
+            errorMsg.textContent = 'Tüm alanları doldur.';
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+
+        try {
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, username, password, referral_code })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+                window.location.href = '/';
+            } else {
+                errorMsg.textContent = data.message || 'Kayıt başarısız.';
+                errorMsg.classList.remove('hidden');
+                btn.disabled = false;
+                btnText.textContent = 'Kayıt Ol';
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Bağlantı hatası, tekrar deneyin.';
+            errorMsg.classList.remove('hidden');
+            btn.disabled = false;
+            btnText.textContent = 'Kayıt Ol';
+        }
+    }
+
+    document.getElementById('reg-referral').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') doRegister();
+    });
+</script>
+{% endblock %}
