@@ -173,6 +173,8 @@ def find_media(trip, filename):
     if entry is not None:
         entry.setdefault('likes', [])
         entry.setdefault('comments', [])
+        entry.setdefault('caption', '')
+        entry.setdefault('memory_date', '')
     return entry
 
 
@@ -512,6 +514,34 @@ def create_trip():
     return jsonify({"status": "success", "trip": trip})
 
 
+@app.route('/api/trips/<trip_id>/edit', methods=['POST'])
+@login_required
+def edit_trip(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    if trip['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Bu albümü sadece oluşturan kişi veya admin düzenleyebilir"}), 403
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    date = (data.get('date') or '').strip()
+    description = (data.get('description') or '').strip()
+
+    if not title:
+        return jsonify({"status": "error", "message": "Başlık gerekli"}), 400
+
+    trip['title'] = title
+    trip['date'] = date
+    trip['description'] = description
+    save_trips(trips)
+
+    return jsonify({"status": "success", "trip": trip})
+
+
 @app.route('/api/trips/<trip_id>/delete', methods=['POST'])
 @login_required
 def delete_trip(trip_id):
@@ -571,6 +601,8 @@ def upload_media(trip_id):
             "type": media_type(unique_name),
             "uploaded_by": user['username'],
             "uploaded_at": datetime.utcnow().isoformat(),
+            "caption": "",
+            "memory_date": "",
             "likes": [],
             "comments": [],
         }
@@ -587,6 +619,36 @@ def upload_media(trip_id):
         return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
 
     return jsonify({"status": "success", "saved": saved, "errors": errors})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/edit', methods=['POST'])
+@login_required
+def edit_media(trip_id, filename):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    if entry['uploaded_by'] != user['username'] and trip['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Bu anıyı sadece ekleyen kişi, albümü oluşturan veya admin düzenleyebilir"}), 403
+
+    data = request.get_json() or {}
+    caption = (data.get('caption') or '').strip()
+    memory_date = (data.get('memory_date') or '').strip()
+
+    if len(caption) > 200:
+        return jsonify({"status": "error", "message": "Başlık çok uzun"}), 400
+
+    entry['caption'] = caption
+    entry['memory_date'] = memory_date
+    save_trips(trips)
+
+    return jsonify({"status": "success", "caption": caption, "memory_date": memory_date})
 
 
 @app.route('/api/trips/<trip_id>/media/<filename>/delete', methods=['POST'])
