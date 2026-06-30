@@ -78,6 +78,10 @@
                           title="{{ users.get(item.uploaded_by, {}).get('name', item.uploaded_by) }}">
                         {{ users.get(item.uploaded_by, {}).get('name', item.uploaded_by)[0] }}
                     </span>
+                    <span class="flex items-center gap-2 text-[11px] text-stone-400">
+                        <span class="flex items-center gap-1"><i class="fa-solid fa-heart {{ 'text-red-400' if user.username in item.get('likes', []) else '' }}"></i>{{ item.get('likes', [])|length }}</span>
+                        <span class="flex items-center gap-1"><i class="fa-regular fa-comment"></i>{{ item.get('comments', [])|length }}</span>
+                    </span>
                 </div>
             </div>
             {% endfor %}
@@ -99,12 +103,28 @@
     </button>
 
     <div class="anim-scale max-w-4xl w-full flex flex-col items-center" id="lightbox-content">
-        <div id="lightbox-media-wrap" class="max-h-[75vh] flex items-center justify-center"></div>
+        <div id="lightbox-media-wrap" class="max-h-[60vh] flex items-center justify-center"></div>
         <div class="flex items-center justify-between w-full mt-4 text-white/80 text-sm px-2">
             <span id="lightbox-uploader" class="flex items-center gap-2"></span>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
+                <button id="lightbox-like-btn" onclick="toggleLike()" class="hover:text-red-400 flex items-center gap-1.5">
+                    <i id="lightbox-like-icon" class="fa-regular fa-heart"></i>
+                    <span id="lightbox-like-count">0</span>
+                </button>
                 <a id="lightbox-download" href="#" download class="hover:text-white" title="İndir"><i class="fa-solid fa-download"></i></a>
                 <button id="lightbox-delete" onclick="deleteCurrentMedia()" class="hover:text-red-400" title="Sil"><i class="fa-regular fa-trash-can"></i></button>
+            </div>
+        </div>
+
+        <!-- Yorumlar -->
+        <div class="w-full max-w-xl bg-white/95 rounded-2xl mt-3 max-h-[26vh] flex flex-col overflow-hidden">
+            <div id="lightbox-comments" class="overflow-y-auto px-4 py-3 space-y-3 text-sm"></div>
+            <div class="border-t border-[var(--line)] p-3 flex items-center gap-2">
+                <input id="lightbox-comment-input" type="text" maxlength="500" placeholder="Bir yorum yaz..."
+                    class="flex-1 px-3 py-2 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+                <button onclick="submitComment()" class="btn-press fab-amber text-white h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-paper-plane text-xs"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -221,7 +241,7 @@
             el = document.createElement('img');
             el.src = url;
         }
-        el.className = 'anim-fade max-h-[75vh] max-w-full rounded-lg shadow-2xl';
+        el.className = 'anim-fade max-h-[58vh] max-w-full rounded-lg shadow-2xl';
         wrap.appendChild(el);
 
         document.getElementById('lightbox-uploader').innerHTML =
@@ -231,7 +251,113 @@
         const deleteBtn = document.getElementById('lightbox-delete');
         const canDelete = item.uploaded_by === CURRENT_USER || TRIP_CREATOR === CURRENT_USER;
         deleteBtn.style.display = canDelete ? 'inline-flex' : 'none';
+
+        renderLikeState();
+        renderComments();
     }
+
+    // --- Beğeni ---
+    function renderLikeState() {
+        const item = MEDIA[lightboxIndex];
+        const likes = item.likes || [];
+        const liked = likes.includes(CURRENT_USER);
+        document.getElementById('lightbox-like-count').textContent = likes.length;
+        const icon = document.getElementById('lightbox-like-icon');
+        icon.className = liked ? 'fa-solid fa-heart text-red-400' : 'fa-regular fa-heart';
+    }
+
+    async function toggleLike() {
+        const item = MEDIA[lightboxIndex];
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/media/${item.filename}/like`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                item.likes = item.likes || [];
+                if (data.liked && !item.likes.includes(CURRENT_USER)) item.likes.push(CURRENT_USER);
+                if (!data.liked) item.likes = item.likes.filter(u => u !== CURRENT_USER);
+                renderLikeState();
+            } else {
+                showToast(data.message || 'Bir hata oluştu', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    // --- Yorumlar ---
+    function escapeHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function renderComments() {
+        const item = MEDIA[lightboxIndex];
+        const comments = item.comments || [];
+        const wrap = document.getElementById('lightbox-comments');
+        if (!comments.length) {
+            wrap.innerHTML = '<p class="text-stone-400 text-center py-2">Henüz yorum yok. İlk yorumu sen yaz!</p>';
+            return;
+        }
+        wrap.innerHTML = comments.map(c => {
+            const u = USERS_MAP[c.username] || {};
+            const canDel = c.username === CURRENT_USER || TRIP_CREATOR === CURRENT_USER;
+            return `
+                <div class="flex items-start gap-2">
+                    <span class="h-6 w-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0" style="background-color:${u.avatar_color || '#999'}">${(u.name || c.username)[0]}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-stone-800"><span class="font-semibold">${escapeHtml(u.name || c.username)}</span> <span class="text-stone-600">${escapeHtml(c.text)}</span></p>
+                    </div>
+                    ${canDel ? `<button onclick="deleteComment('${c.id}')" class="text-stone-300 hover:text-red-500 shrink-0 mt-0.5"><i class="fa-regular fa-trash-can text-xs"></i></button>` : ''}
+                </div>`;
+        }).join('');
+        wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    async function submitComment() {
+        const input = document.getElementById('lightbox-comment-input');
+        const text = input.value.trim();
+        if (!text) return;
+        const item = MEDIA[lightboxIndex];
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/media/${item.filename}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                item.comments = item.comments || [];
+                item.comments.push(data.comment);
+                input.value = '';
+                renderComments();
+            } else {
+                showToast(data.message || 'Yorum eklenemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function deleteComment(commentId) {
+        const item = MEDIA[lightboxIndex];
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/media/${item.filename}/comments/${commentId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                item.comments = (item.comments || []).filter(c => c.id !== commentId);
+                renderComments();
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    document.getElementById('lightbox-comment-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') submitComment();
+    });
 
     document.addEventListener('keydown', (e) => {
         if (document.getElementById('lightbox').classList.contains('hidden')) return;
