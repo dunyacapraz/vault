@@ -272,10 +272,20 @@
         }
     }
     async function handlePushToggle() {
-        const subscribed = await isPushSubscribed();
-        if (subscribed) {
-            showToast('Bildirimler zaten açık', 'info');
+        // iOS Safari, izin penceresini ancak Notification.requestPermission()
+        // tıklama olayına araya başka await girmeden bağlıysa gösterir.
+        // Bu yüzden önce senkron permission kontrolü yapıyoruz, izin isteme
+        // çağrısını mümkün olduğunca erken tetikliyoruz.
+        if (Notification.permission === 'denied') {
+            showToast('Bildirimlere izin verilmemiş. iPhone\'da Ayarlar > Bildirimler > Vault yolundan elle açman gerekiyor.', 'error');
             return;
+        }
+        if (Notification.permission === 'granted') {
+            const subscribed = await isPushSubscribed();
+            if (subscribed) {
+                showToast('Bildirimler zaten açık', 'info');
+                return;
+            }
         }
         await enablePushNotifications();
         refreshPushToggleIcon();
