@@ -354,9 +354,6 @@ def delete_trip(trip_id):
     if not trip:
         return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
 
-    if trip['created_by'] != user['username']:
-        return jsonify({"status": "error", "message": "Sadece albümü oluşturan kişi silebilir"}), 403
-
     trips.remove(trip)
     save_trips(trips)
 
