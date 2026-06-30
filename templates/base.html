@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Vault | Ortak Anılar{% endblock %}</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2c5cf6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Vault">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="icon" href="/static/icons/icon-192.png">
     <script>
         (function () {
             try {
@@ -230,6 +238,74 @@
                 toast.style.transform = 'translateX(16px)';
                 setTimeout(() => toast.remove(), 300);
             }, 3200);
+        }
+
+        // --- PWA / Push bildirimleri ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+            return outputArray;
+        }
+
+        function pushSupported() {
+            return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        }
+
+        async function isPushSubscribed() {
+            if (!pushSupported()) return false;
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                return !!sub;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function enablePushNotifications() {
+            if (!pushSupported()) {
+                showToast('Bu tarayıcı bildirimleri desteklemiyor. iPhone\'da önce Vault\'u ana ekrana eklemen gerekiyor.', 'error');
+                return false;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    showToast('Bildirim izni verilmedi', 'error');
+                    return false;
+                }
+                const keyRes = await fetch('/api/push/public-key');
+                const keyData = await keyRes.json();
+                if (!keyData.publicKey) {
+                    showToast('Bildirim sistemi sunucuda henüz ayarlanmamış', 'error');
+                    return false;
+                }
+                const reg = await navigator.serviceWorker.ready;
+                let sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+                    });
+                }
+                await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sub),
+                });
+                showToast('Bildirimler açıldı', 'success');
+                return true;
+            } catch (err) {
+                console.error('Push subscribe error:', err);
+                showToast('Bildirimler açılamadı', 'error');
+                return false;
+            }
         }
     </script>
     {% block scripts %}{% endblock %}
