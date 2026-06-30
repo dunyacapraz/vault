@@ -10,6 +10,12 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
+try:
+    from pywebpush import webpush, WebPushException
+    PUSH_AVAILABLE = True
+except ImportError:
+    PUSH_AVAILABLE = False
+
 from flask import (
     Flask, render_template, request, session, jsonify,
     abort, Response, stream_with_context, redirect, url_for
@@ -25,6 +31,16 @@ BASE_DIR = os.path.dirname(__file__)
 META_TRIPS_KEY = "_meta/trips.json"
 META_EVENTS_KEY = "_meta/events.json"
 META_USERS_KEY = "_meta/users.json"
+META_PUSH_KEY = "_meta/push_subscriptions.json"
+
+# ---------------------------------------------------------------------------
+# Web Push (PWA bildirimleri) yapılandırması — .env dosyasından okunur.
+# Anahtarları üretmek için: python3 generate_vapid_keys.py
+# ---------------------------------------------------------------------------
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY')
+VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'mailto:admin@example.com')
+PUSH_CONFIGURED = bool(PUSH_AVAILABLE and VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
 
 # Yeni üyelik için gereken referans kodu (sadece bu kodu bilenler kayıt olabilir)
 REFERRAL_CODE = os.environ.get('REFERRAL_CODE', 'dunya3461')
@@ -182,6 +198,58 @@ def find_media(trip, filename):
         entry.setdefault('caption', '')
         entry.setdefault('memory_date', '')
     return entry
+
+
+def load_push_subscriptions():
+    return r2_read_json(META_PUSH_KEY, {})
+
+
+def save_push_subscriptions(subs):
+    r2_write_json(META_PUSH_KEY, subs)
+
+
+def send_push_notification(payload, exclude_username=None):
+    """Tüm üyelere (isteğe bağlı biri hariç) push bildirimi gönderir.
+    Push ayarlanmamışsa veya hata olursa sessizce geçer — bildirim asla ana işlemi bozmaz."""
+    if not PUSH_CONFIGURED:
+        return
+
+    subs = load_push_subscriptions()
+    if not subs:
+        return
+
+    changed = False
+    body = json.dumps(payload, ensure_ascii=False)
+
+    for username, sub_list in list(subs.items()):
+        if username == exclude_username:
+            continue
+        still_valid = []
+        for sub in sub_list:
+            try:
+                webpush(
+                    subscription_info=sub,
+                    data=body,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": VAPID_CLAIM_EMAIL},
+                )
+                still_valid.append(sub)
+            except WebPushException as e:
+                status = getattr(e.response, 'status_code', None)
+                if status in (404, 410):
+                    changed = True  # abonelik geçersiz/iptal — listeden düşür
+                else:
+                    still_valid.append(sub)
+                    print(f"[PUSH HATASI] {username}: {e}")
+            except Exception as e:
+                still_valid.append(sub)
+                print(f"[PUSH BEKLENMEYEN HATA] {username}: {e}")
+        if len(still_valid) != len(sub_list):
+            subs[username] = still_valid
+            changed = True
+
+    if changed:
+        save_push_subscriptions(subs)
 
 
 def load_events():
@@ -624,6 +692,17 @@ def upload_media(trip_id):
             return jsonify({"status": "error", "message": f"Yüklenemedi: {', '.join(errors)} (terminaldeki hata mesajına bak)"}), 400
         return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
 
+    try:
+        count = len(saved)
+        body = f"{user['name']} \"{trip['title']}\" albümüne {count} yeni anı ekledi" if count > 1 \
+            else f"{user['name']} \"{trip['title']}\" albümüne yeni bir anı ekledi"
+        send_push_notification(
+            {"title": "📸 Yeni anı eklendi", "body": body, "url": f"/trip/{trip_id}", "tag": f"trip-{trip_id}"},
+            exclude_username=user['username'],
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
+
     return jsonify({"status": "success", "saved": saved, "errors": errors})
 
 
@@ -846,6 +925,51 @@ def delete_event(event_id):
 
     events.remove(event)
     save_events(events)
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Push Bildirimi Abonelik API
+# ---------------------------------------------------------------------------
+@app.route('/api/push/public-key')
+@login_required
+def push_public_key():
+    return jsonify({"publicKey": VAPID_PUBLIC_KEY if PUSH_CONFIGURED else None})
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def push_subscribe():
+    user = current_user()
+    sub = request.get_json(silent=True)
+    if not sub or not sub.get('endpoint'):
+        return jsonify({"status": "error", "message": "Geçersiz abonelik"}), 400
+
+    subs = load_push_subscriptions()
+    user_subs = subs.setdefault(user['username'], [])
+
+    # Aynı endpoint zaten kayıtlıysa tekrar ekleme
+    if not any(s.get('endpoint') == sub['endpoint'] for s in user_subs):
+        user_subs.append(sub)
+        save_push_subscriptions(subs)
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+def push_unsubscribe():
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+
+    subs = load_push_subscriptions()
+    user_subs = subs.get(user['username'], [])
+    new_subs = [s for s in user_subs if s.get('endpoint') != endpoint]
+    if len(new_subs) != len(user_subs):
+        subs[user['username']] = new_subs
+        save_push_subscriptions(subs)
+
     return jsonify({"status": "success"})
 
 
