@@ -1,41 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Vault | Giriş{% endblock %}
 {% block content %}
-<div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-6" style="background: radial-gradient(circle at 20% 20%, #f3e6cf 0%, var(--paper) 55%);">
+<div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 gap-6">
 
     {% if events %}
     {% set next_event = events[0] %}
-    <div class="anim-fade-up w-full max-w-[400px] bg-[var(--ink)] text-white rounded-2xl shadow-md p-6 relative overflow-hidden">
-        <div class="absolute -top-8 -right-8 h-28 w-28 rounded-full fab-amber opacity-20"></div>
-        <p class="text-xs uppercase tracking-widest text-amber-300 font-semibold flex items-center gap-1.5">
-            <i class="fa-solid fa-calendar-star"></i> Yaklaşan Etkinlik
-        </p>
-        <h3 class="font-display text-xl font-semibold mt-1.5">{{ next_event.title }}</h3>
-        {% if next_event.location %}
-        <p class="text-white/60 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ next_event.location }}</p>
-        {% endif %}
+    <div class="anim-fade-up w-full max-w-[400px] bg-white border border-[var(--line)] rounded-2xl shadow-sm overflow-hidden">
+        <div class="px-6 pt-5 pb-4">
+            <p class="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">Yaklaşan Etkinlik</p>
+            <h3 class="font-display text-xl mt-1.5">{{ next_event.title }}</h3>
+            {% if next_event.location %}
+            <p class="text-stone-500 text-xs mt-1"><i class="fa-solid fa-location-dot mr-1"></i>{{ next_event.location }}</p>
+            {% endif %}
+        </div>
 
-        <div id="countdown" class="grid grid-cols-4 gap-2 mt-4" data-target="{{ next_event.date }}T{{ next_event.time or '00:00' }}">
-            <div class="bg-white/10 rounded-lg py-2.5 text-center">
-                <div class="font-display text-2xl font-semibold leading-none" id="cd-days">--</div>
-                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">gün</div>
+        <div class="relative">
+            <div class="absolute -left-2.5 top-0 h-5 w-5 rounded-full bg-[var(--paper)] border border-[var(--line)]"></div>
+            <div class="absolute -right-2.5 top-0 h-5 w-5 rounded-full bg-[var(--paper)] border border-[var(--line)]"></div>
+            <div class="border-t border-dashed border-[var(--line)] mx-4"></div>
+        </div>
+
+        <div id="countdown" class="grid grid-cols-4 gap-px bg-[var(--line)]" data-target="{{ next_event.date }}T{{ next_event.time or '00:00' }}">
+            <div class="bg-white py-3.5 text-center">
+                <div class="font-mono text-2xl font-semibold leading-none text-[var(--ink)]" id="cd-days">--</div>
+                <div class="text-[9px] text-stone-400 mt-1.5 uppercase tracking-wider">gün</div>
             </div>
-            <div class="bg-white/10 rounded-lg py-2.5 text-center">
-                <div class="font-display text-2xl font-semibold leading-none" id="cd-hours">--</div>
-                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">saat</div>
+            <div class="bg-white py-3.5 text-center">
+                <div class="font-mono text-2xl font-semibold leading-none text-[var(--ink)]" id="cd-hours">--</div>
+                <div class="text-[9px] text-stone-400 mt-1.5 uppercase tracking-wider">saat</div>
             </div>
-            <div class="bg-white/10 rounded-lg py-2.5 text-center">
-                <div class="font-display text-2xl font-semibold leading-none" id="cd-mins">--</div>
-                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">dakika</div>
+            <div class="bg-white py-3.5 text-center">
+                <div class="font-mono text-2xl font-semibold leading-none text-[var(--ink)]" id="cd-mins">--</div>
+                <div class="text-[9px] text-stone-400 mt-1.5 uppercase tracking-wider">dakika</div>
             </div>
-            <div class="bg-white/10 rounded-lg py-2.5 text-center">
-                <div class="font-display text-2xl font-semibold leading-none" id="cd-secs">--</div>
-                <div class="text-[10px] text-white/50 mt-1 uppercase tracking-wide">saniye</div>
+            <div class="bg-white py-3.5 text-center">
+                <div class="font-mono text-2xl font-semibold leading-none text-[var(--amber)]" id="cd-secs">--</div>
+                <div class="text-[9px] text-stone-400 mt-1.5 uppercase tracking-wider">saniye</div>
             </div>
         </div>
 
         {% if events|length > 1 %}
-        <p class="text-white/40 text-[11px] mt-3">+ {{ events|length - 1 }} etkinlik daha — giriş yaptıktan sonra görebilirsin</p>
+        <p class="text-stone-400 text-[11px] px-6 py-3 border-t border-[var(--line)]">+ {{ events|length - 1 }} etkinlik daha — giriş yaptıktan sonra görebilirsin</p>
         {% endif %}
     </div>
     {% endif %}
@@ -149,7 +154,7 @@
             if (diff <= 0) {
                 els.d.textContent = '0'; els.h.textContent = '0';
                 els.m.textContent = '0'; els.s.textContent = '0';
-                document.querySelector('#countdown').closest('div.anim-fade-up').querySelector('p.text-xs').innerHTML =
+                document.querySelector('#countdown').closest('div.anim-fade-up').querySelector('p.font-mono').innerHTML =
                     '<i class="fa-solid fa-party-horn"></i> Etkinlik Başladı!';
                 clearInterval(timer);
                 return;
