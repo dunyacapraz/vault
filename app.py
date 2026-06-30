@@ -1,371 +1,786 @@
-{% extends "base.html" %}
-{% block title %}Vault | Albümler{% endblock %}
-{% block content %}
-<div class="min-h-screen">
-    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-20 px-5 sm:px-8 py-5 border-b border-[var(--line)] flex justify-between items-center anim-fade">
-        <div class="flex items-center gap-3">
-            <div class="h-10 w-10 fab-amber rounded-xl flex items-center justify-center shadow-md">
-                <i class="fa-solid fa-vault text-white"></i>
-            </div>
-            <div>
-                <span class="font-display font-semibold text-xl tracking-tight block leading-none">Vault</span>
-                <span class="text-xs text-stone-500">Ortak anı arşivi</span>
-            </div>
-        </div>
-        <div class="flex items-center gap-3">
-            <div class="hidden sm:flex items-center gap-2 text-sm text-stone-600">
-                <div class="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                     style="background-color: {{ user.avatar_color }}">
-                    {{ user.name[0] }}
-                </div>
-                <span class="font-medium">{{ user.name }}</span>
-            </div>
-            {% if user.is_admin %}
-            <a href="/admin" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Admin Paneli">
-                <i class="fa-solid fa-user-shield"></i>
-            </a>
-            {% endif %}
-            <a href="/account" class="btn-press text-stone-500 hover:text-stone-800 hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Hesap Ayarları">
-                <i class="fa-solid fa-gear"></i>
-            </a>
-            <button onclick="logout()" class="btn-press text-stone-500 hover:text-red-600 hover:bg-red-50 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Çıkış Yap">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            </button>
-        </div>
-    </header>
+import os
+import json
+import uuid
+import random
+from datetime import datetime
+from functools import wraps
 
-    <main class="px-5 sm:px-8 py-8 max-w-6xl mx-auto">
-        {% if all_events %}
-        <div class="anim-fade-up mb-9">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="font-display text-xl font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-star text-[var(--amber)]"></i> Yaklaşan Etkinlikler
-                </h2>
-                <button onclick="openEventModal()" class="btn-press text-sm text-[var(--amber-deep)] hover:bg-stone-100 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus"></i> Etkinlik Ekle
-                </button>
-            </div>
-            <div class="flex gap-3 overflow-x-auto pb-2 stagger">
-                {% for ev in all_events %}
-                <div class="shrink-0 w-64 bg-white border border-[var(--line)] rounded-2xl overflow-hidden relative">
-                    <div class="absolute left-0 top-0 bottom-0 w-1 fab-amber"></div>
-                    <div class="pl-4 pr-4 py-4">
-                        <p class="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-400">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</p>
-                        <h3 class="font-display font-semibold mt-1 truncate">{{ ev.title }}</h3>
-                        {% if ev.location %}<p class="text-stone-500 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
-                        <div class="flex items-center justify-between mt-3">
-                            <span class="font-mono text-xs text-[var(--amber-deep)] font-medium countdown-chip" data-target="{{ ev.date }}T{{ ev.time or '00:00' }}">—</span>
-                            {% if ev.created_by == user.username %}
-                            <button onclick="deleteEvent('{{ ev.id }}')" class="text-stone-300 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
+from dotenv import load_dotenv
 
-        <div class="flex flex-wrap items-end justify-between gap-4 mb-8 anim-fade-up">
-            <div>
-                <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Tatiller &amp; Anılar</h1>
-                <p class="text-stone-500 mt-1 text-sm">{{ trips|length }} albüm · {{ users|length }} üye</p>
-            </div>
-            <div class="flex gap-2">
-                {% if not all_events %}
-                <button onclick="openEventModal()" class="btn-press bg-white border border-stone-300 text-stone-700 px-5 py-3 rounded-xl font-medium shadow-sm hover:bg-stone-50 transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-star"></i> Etkinlik Ekle
-                </button>
-                {% endif %}
-                <button onclick="openCreateModal()" class="btn-press fab-amber text-white px-5 py-3 rounded-xl font-medium shadow-md hover:brightness-105 transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-plus"></i> Yeni Tatil Ekle
-                </button>
-            </div>
-        </div>
+from flask import (
+    Flask, render_template, request, session, jsonify,
+    abort, Response, stream_with_context, redirect, url_for
+)
+from werkzeug.utils import secure_filename
 
-        {% if not trips %}
-        <div class="anim-fade-up text-center py-24 border-2 border-dashed border-stone-300 rounded-3xl bg-white/60">
-            <i class="fa-solid fa-suitcase-rolling text-stone-300 text-5xl mb-4"></i>
-            <p class="text-stone-500 font-medium">Henüz hiç albüm yok.</p>
-            <p class="text-stone-400 text-sm mt-1">İlk tatili sen ekle, anılar buradan başlasın.</p>
-            <button onclick="openCreateModal()" class="btn-press mt-5 fab-amber text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:brightness-105 transition-all">
-                Albüm Oluştur
-            </button>
-        </div>
-        {% else %}
-        <div class="stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% for trip in trips %}
-            <a href="/trip/{{ trip.id }}" class="trip-card block bg-white rounded-2xl overflow-hidden shadow-sm border border-[var(--line)] group">
-                <div class="relative aspect-[4/3] bg-stone-200 overflow-hidden">
-                    {% if trip.cover %}
-                    <img src="/uploads/{{ trip.id }}/{{ trip.cover }}" alt="{{ trip.title }}"
-                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    {% else %}
-                    <div class="w-full h-full flex items-center justify-center text-stone-400">
-                        <i class="fa-regular fa-images text-4xl"></i>
-                    </div>
-                    {% endif %}
-                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                        <span class="text-white/90 text-xs font-medium flex items-center gap-1.5">
-                            <i class="fa-regular fa-image"></i> {{ trip.media|length }} anı
-                        </span>
-                    </div>
-                </div>
-                <div class="p-4">
-                    <h3 class="font-display font-semibold text-lg leading-tight truncate">{{ trip.title }}</h3>
-                    <div class="flex items-center justify-between mt-2">
-                        <span class="text-xs text-stone-500">
-                            {% if trip.date %}<i class="fa-regular fa-calendar mr-1"></i>{{ trip.date }}{% else %}&nbsp;{% endif %}
-                        </span>
-                        <div class="h-6 w-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-                             style="background-color: {{ users.get(trip.created_by, {}).get('avatar_color', '#999') }}"
-                             title="{{ users.get(trip.created_by, {}).get('name', trip.created_by) }} oluşturdu">
-                            {{ users.get(trip.created_by, {}).get('name', trip.created_by)[0] }}
-                        </div>
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </main>
-</div>
+load_dotenv()  # .env dosyasındaki değişkenleri oku
 
-<!-- Yeni Tatil Modalı -->
-<div id="create-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Yeni Tatil / Anı Albümü</h3>
-            <button onclick="closeCreateModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
-                <input type="text" id="trip-title" placeholder="örn. Tekirdağ Tatili"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Tarih</label>
-                <input type="date" id="trip-date"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Açıklama <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
-                <textarea id="trip-description" rows="2" placeholder="Bu tatille ilgili kısa bir not..."
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none resize-none"></textarea>
-            </div>
-            <button onclick="createTrip()" id="create-trip-btn"
-                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
-                <span id="create-trip-btn-text">Albümü Oluştur</span>
-            </button>
-        </div>
-    </div>
-</div>
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'vault_secure_key_2026_change_me')
 
-<!-- Yeni Etkinlik Modalı -->
-<div id="event-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Yeni Etkinlik</h3>
-            <button onclick="closeEventModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="space-y-4">
-            <div id="event-error-msg" class="hidden bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200 text-center"></div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
-                <input type="text" id="event-title" placeholder="örn. Tekirdağ Buluşması"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-sm font-semibold text-stone-700 mb-1">Tarih</label>
-                    <input type="date" id="event-date"
-                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-stone-700 mb-1">Saat <span class="text-stone-400 font-normal">(ops.)</span></label>
-                    <input type="time" id="event-time"
-                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Yer <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
-                <input type="text" id="event-location" placeholder="örn. Tekirdağ"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <button onclick="submitNewEvent()" id="create-event-btn"
-                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
-                <span id="create-event-btn-text">Etkinliği Ekle</span>
-            </button>
-        </div>
-    </div>
-</div>
-{% endblock %}
+BASE_DIR = os.path.dirname(__file__)
+META_TRIPS_KEY = "_meta/trips.json"
+META_EVENTS_KEY = "_meta/events.json"
+META_USERS_KEY = "_meta/users.json"
 
-{% block scripts %}
-<script>
-    function openCreateModal() {
-        document.getElementById('create-modal').classList.remove('hidden');
-        document.getElementById('trip-title').focus();
+# Yeni üyelik için gereken referans kodu (sadece bu kodu bilenler kayıt olabilir)
+REFERRAL_CODE = os.environ.get('REFERRAL_CODE', 'dunya3461')
+
+AVATAR_PALETTE = [
+    "#be185d", "#1d4ed8", "#15803d", "#b45309", "#7c3aed",
+    "#0e7490", "#c2410c", "#4d7c0f", "#9d174d", "#1e40af",
+]
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov', 'avi', 'webm'}
+VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm'}
+
+# ---------------------------------------------------------------------------
+# Cloudflare R2 yapılandırması (.env dosyasından okunur)
+# ---------------------------------------------------------------------------
+R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID')
+R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
+R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
+R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
+R2_ENDPOINT_URL = os.environ.get('R2_ENDPOINT_URL') or (
+    f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if R2_ACCOUNT_ID else None
+)
+
+if not all([R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT_URL]):
+    raise RuntimeError(
+        "R2 ortam değişkenleri eksik. .env dosyanı kontrol et "
+        "(R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME)."
+    )
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url=R2_ENDPOINT_URL,
+    aws_access_key_id=R2_ACCESS_KEY_ID,
+    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+    config=Config(signature_version="s3v4", region_name="auto"),
+)
+
+
+def r2_key(trip_id, filename):
+    return f"{trip_id}/{filename}"
+
+
+def r2_upload(fileobj, trip_id, filename, content_type=None):
+    extra = {"ContentType": content_type} if content_type else {}
+    s3.upload_fileobj(fileobj, R2_BUCKET_NAME, r2_key(trip_id, filename), ExtraArgs=extra)
+
+
+def r2_delete(trip_id, filename):
+    try:
+        s3.delete_object(Bucket=R2_BUCKET_NAME, Key=r2_key(trip_id, filename))
+    except ClientError:
+        pass
+
+
+def r2_delete_prefix(trip_id):
+    """Bir albümün tüm dosyalarını R2'den siler."""
+    paginator = s3.get_paginator('list_objects_v2')
+    try:
+        for page in paginator.paginate(Bucket=R2_BUCKET_NAME, Prefix=f"{trip_id}/"):
+            for obj in page.get('Contents', []):
+                s3.delete_object(Bucket=R2_BUCKET_NAME, Key=obj['Key'])
+    except ClientError:
+        pass
+
+
+def r2_read_json(key, default):
+    """R2'den JSON oku. Yoksa varsayılan değeri döner (Render gibi disksiz ortamlarda kalıcılık için)."""
+    try:
+        obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') in ('NoSuchKey', '404'):
+            return default
+        raise
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return default
+
+
+def r2_write_json(key, data):
+    body = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+    s3.put_object(Bucket=R2_BUCKET_NAME, Key=key, Body=body, ContentType='application/json')
+
+
+# ---------------------------------------------------------------------------
+# Üyeler — başlangıçta birkaç sabit hesapla başlar, sonrasında /register
+# üzerinden referans kodu ile katılan herkes data/_meta/users.json içine
+# (R2 üzerinde) kalıcı olarak eklenir.
+# ---------------------------------------------------------------------------
+DEFAULT_USERS = {
+    "admin":  {"password": os.environ.get('PW_ADMIN', '1234'),        "name": "Admin",  "avatar_color": "#0f172a", "is_admin": True},
+    "ayse":   {"password": os.environ.get('PW_AYSE', 'ayse2026'),     "name": "Ayşe",   "avatar_color": "#be185d", "is_admin": False},
+    "mehmet": {"password": os.environ.get('PW_MEHMET', 'mehmet2026'), "name": "Mehmet", "avatar_color": "#1d4ed8", "is_admin": False},
+    "zeynep": {"password": os.environ.get('PW_ZEYNEP', 'zeynep2026'), "name": "Zeynep", "avatar_color": "#15803d", "is_admin": False},
+}
+
+
+def load_users():
+    """Kayıtlı üyeleri R2'den okur. İlk çalıştırmada DEFAULT_USERS ile başlatır."""
+    users = r2_read_json(META_USERS_KEY, None)
+    if users is None:
+        users = dict(DEFAULT_USERS)
+        r2_write_json(META_USERS_KEY, users)
+        return users
+
+    # Eski kayıtlarda is_admin alanı olmayabilir — geriye dönük uyumluluk
+    changed = False
+    for uname, info in users.items():
+        if 'is_admin' not in info:
+            info['is_admin'] = (uname == 'admin')
+            changed = True
+    if changed:
+        save_users(users)
+    return users
+
+
+def save_users(users):
+    r2_write_json(META_USERS_KEY, users)
+
+
+# ---------------------------------------------------------------------------
+# Yardımcı fonksiyonlar
+# ---------------------------------------------------------------------------
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def media_type(filename):
+    ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    return 'video' if ext in VIDEO_EXTENSIONS else 'image'
+
+
+def load_trips():
+    return r2_read_json(META_TRIPS_KEY, [])
+
+
+def save_trips(trips):
+    r2_write_json(META_TRIPS_KEY, trips)
+
+
+def find_trip(trips, trip_id):
+    return next((t for t in trips if t['id'] == trip_id), None)
+
+
+def find_media(trip, filename):
+    entry = next((m for m in trip.get('media', []) if m['filename'] == filename), None)
+    if entry is not None:
+        entry.setdefault('likes', [])
+        entry.setdefault('comments', [])
+    return entry
+
+
+def load_events():
+    return r2_read_json(META_EVENTS_KEY, [])
+
+
+def save_events(events):
+    r2_write_json(META_EVENTS_KEY, events)
+
+
+def event_datetime(event):
+    time_str = event.get('time') or '00:00'
+    try:
+        return datetime.fromisoformat(f"{event['date']}T{time_str}")
+    except (ValueError, KeyError):
+        return None
+
+
+def upcoming_events():
+    now = datetime.now()
+    events = load_events()
+    with_dt = [(e, event_datetime(e)) for e in events]
+    future = [e for e, dt in with_dt if dt and dt >= now]
+    future.sort(key=lambda e: event_datetime(e))
+    return future
+
+
+def public_users():
+    users = load_users()
+    return {u: {"name": info["name"], "avatar_color": info["avatar_color"]} for u, info in users.items()}
+
+
+def current_user():
+    username = session.get('username')
+    if not username:
+        return None
+    users = load_users()
+    info = users.get(username)
+    if not info:
+        return None
+    return {
+        "username": username,
+        "name": info["name"],
+        "avatar_color": info["avatar_color"],
+        "is_admin": bool(info.get("is_admin")),
     }
-    function closeCreateModal() {
-        document.getElementById('create-modal').classList.add('hidden');
+
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not current_user():
+            if request.path.startswith('/api/') or request.method != 'GET':
+                return jsonify({"status": "error", "message": "Yetkisiz erişim"}), 403
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        user = current_user()
+        if not user or not user.get('is_admin'):
+            if request.path.startswith('/api/') or request.method != 'GET':
+                return jsonify({"status": "error", "message": "Sadece admin erişebilir"}), 403
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# ---------------------------------------------------------------------------
+# Sayfa rotaları
+# ---------------------------------------------------------------------------
+@app.route('/')
+def index():
+    user = current_user()
+    events = upcoming_events()
+    if not user:
+        return render_template('login.html', events=events)
+
+    trips = load_trips()
+    trips_sorted = sorted(trips, key=lambda t: t.get('created_at', ''), reverse=True)
+    return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
+                            events=events, all_events=load_events())
+
+
+@app.route('/trip/<trip_id>')
+@login_required
+def trip_detail(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        abort(404)
+    media_sorted = sorted(trip.get('media', []), key=lambda m: m.get('uploaded_at', ''), reverse=True)
+    return render_template('trip.html', user=user, trip=trip, media=media_sorted, users=public_users())
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+
+    users = load_users()
+    user = users.get(username)
+    if user and user['password'] == password:
+        session['username'] = username
+        return jsonify({"status": "success", "name": user['name']})
+    return jsonify({"status": "error", "message": "Hatalı kullanıcı adı veya şifre"}), 401
+
+
+@app.route('/register', methods=['GET'])
+def register_page():
+    if current_user():
+        return redirect(url_for('index'))
+    return render_template('register.html')
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+    name = (data.get('name') or '').strip()
+    referral_code = (data.get('referral_code') or '').strip()
+
+    if not username or not password or not name:
+        return jsonify({"status": "error", "message": "Kullanıcı adı, şifre ve isim gerekli"}), 400
+
+    if not username.replace('_', '').isalnum():
+        return jsonify({"status": "error", "message": "Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"}), 400
+
+    if len(password) < 4:
+        return jsonify({"status": "error", "message": "Şifre en az 4 karakter olmalı"}), 400
+
+    if referral_code != REFERRAL_CODE:
+        return jsonify({"status": "error", "message": "Referans kodu hatalı"}), 403
+
+    users = load_users()
+    if username in users:
+        return jsonify({"status": "error", "message": "Bu kullanıcı adı zaten alınmış"}), 409
+
+    users[username] = {
+        "password": password,
+        "name": name,
+        "avatar_color": random.choice(AVATAR_PALETTE),
     }
-    document.getElementById('create-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'create-modal') closeCreateModal();
-    });
+    save_users(users)
 
-    async function createTrip() {
-        const title = document.getElementById('trip-title').value.trim();
-        const date = document.getElementById('trip-date').value;
-        const description = document.getElementById('trip-description').value.trim();
-        const btn = document.getElementById('create-trip-btn');
-        const btnText = document.getElementById('create-trip-btn-text');
+    session['username'] = username
+    return jsonify({"status": "success", "name": name})
 
-        if (!title) {
-            showToast('Başlık gerekli', 'error');
-            return;
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.pop('username', None)
+    return jsonify({"status": "success"})
+
+
+def rename_username_everywhere(old, new):
+    """Kullanıcı adı değiştiğinde tüm albüm/etkinlik verilerindeki referansları günceller."""
+    trips = load_trips()
+    for trip in trips:
+        if trip.get('created_by') == old:
+            trip['created_by'] = new
+        for m in trip.get('media', []):
+            if m.get('uploaded_by') == old:
+                m['uploaded_by'] = new
+            m['likes'] = [new if u == old else u for u in m.get('likes', [])]
+            for c in m.get('comments', []):
+                if c.get('username') == old:
+                    c['username'] = new
+    save_trips(trips)
+
+    events = load_events()
+    changed = False
+    for ev in events:
+        if ev.get('created_by') == old:
+            ev['created_by'] = new
+            changed = True
+    if changed:
+        save_events(events)
+
+
+# ---------------------------------------------------------------------------
+# Hesap Ayarları
+# ---------------------------------------------------------------------------
+@app.route('/account')
+@login_required
+def account_page():
+    return render_template('account.html', user=current_user())
+
+
+@app.route('/api/account', methods=['POST'])
+@login_required
+def update_account():
+    user = current_user()
+    data = request.get_json() or {}
+    new_username = (data.get('username') or '').strip().lower()
+    new_name = (data.get('name') or '').strip()
+    current_password = data.get('current_password') or ''
+    new_password = data.get('new_password') or ''
+
+    users = load_users()
+    info = users[user['username']]
+
+    if info['password'] != current_password:
+        return jsonify({"status": "error", "message": "Mevcut şifre hatalı"}), 403
+
+    if new_username and not new_username.replace('_', '').isalnum():
+        return jsonify({"status": "error", "message": "Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"}), 400
+
+    if new_password and len(new_password) < 4:
+        return jsonify({"status": "error", "message": "Yeni şifre en az 4 karakter olmalı"}), 400
+
+    old_username = user['username']
+    final_username = old_username
+
+    if new_username and new_username != old_username:
+        if new_username in users:
+            return jsonify({"status": "error", "message": "Bu kullanıcı adı zaten alınmış"}), 409
+        users[new_username] = info
+        del users[old_username]
+        final_username = new_username
+        rename_username_everywhere(old_username, new_username)
+
+    if new_name:
+        users[final_username]['name'] = new_name
+    if new_password:
+        users[final_username]['password'] = new_password
+
+    save_users(users)
+    session['username'] = final_username
+
+    return jsonify({"status": "success", "username": final_username, "name": users[final_username]['name']})
+
+
+# ---------------------------------------------------------------------------
+# Admin Paneli
+# ---------------------------------------------------------------------------
+@app.route('/admin')
+@admin_required
+def admin_page():
+    users = load_users()
+    trips = load_trips()
+    events = load_events()
+    return render_template('admin.html', user=current_user(), users=users, trips=trips,
+                            events=events, referral_code=REFERRAL_CODE)
+
+
+@app.route('/api/admin/users/<username>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(username):
+    admin = current_user()
+    if username == admin['username']:
+        return jsonify({"status": "error", "message": "Kendi hesabını silemezsin"}), 400
+
+    users = load_users()
+    if username not in users:
+        return jsonify({"status": "error", "message": "Kullanıcı bulunamadı"}), 404
+
+    del users[username]
+    save_users(users)
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/admin/users/<username>/toggle-admin', methods=['POST'])
+@admin_required
+def admin_toggle_admin(username):
+    admin = current_user()
+    if username == admin['username']:
+        return jsonify({"status": "error", "message": "Kendi admin yetkini değiştiremezsin"}), 400
+
+    users = load_users()
+    if username not in users:
+        return jsonify({"status": "error", "message": "Kullanıcı bulunamadı"}), 404
+
+    users[username]['is_admin'] = not users[username].get('is_admin', False)
+    save_users(users)
+    return jsonify({"status": "success", "is_admin": users[username]['is_admin']})
+
+
+@app.route('/api/admin/users/<username>/reset-password', methods=['POST'])
+@admin_required
+def admin_reset_password(username):
+    data = request.get_json() or {}
+    new_password = data.get('new_password') or ''
+    if len(new_password) < 4:
+        return jsonify({"status": "error", "message": "Şifre en az 4 karakter olmalı"}), 400
+
+    users = load_users()
+    if username not in users:
+        return jsonify({"status": "error", "message": "Kullanıcı bulunamadı"}), 404
+
+    users[username]['password'] = new_password
+    save_users(users)
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Tatil / Anı (trip) API
+# ---------------------------------------------------------------------------
+@app.route('/api/trips', methods=['POST'])
+@login_required
+def create_trip():
+    user = current_user()
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    date = (data.get('date') or '').strip()
+    description = (data.get('description') or '').strip()
+
+    if not title:
+        return jsonify({"status": "error", "message": "Başlık gerekli"}), 400
+
+    trip_id = uuid.uuid4().hex[:12]
+    trip = {
+        "id": trip_id,
+        "title": title,
+        "date": date,
+        "description": description,
+        "created_by": user['username'],
+        "created_at": datetime.utcnow().isoformat(),
+        "cover": None,
+        "media": [],
+    }
+
+    trips = load_trips()
+    trips.append(trip)
+    save_trips(trips)
+
+    return jsonify({"status": "success", "trip": trip})
+
+
+@app.route('/api/trips/<trip_id>/delete', methods=['POST'])
+@login_required
+def delete_trip(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    trips.remove(trip)
+    save_trips(trips)
+
+    r2_delete_prefix(trip_id)
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/trips/<trip_id>/upload', methods=['POST'])
+@login_required
+def upload_media(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    files = request.files.getlist('files') or request.files.getlist('file')
+    if not files:
+        return jsonify({"status": "error", "message": "Dosya seçilmedi"}), 400
+
+    saved = []
+    errors = []
+    for file in files:
+        if not file or file.filename == '':
+            continue
+        if not allowed_file(file.filename):
+            errors.append(file.filename)
+            continue
+
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        unique_name = f"{uuid.uuid4().hex[:10]}.{ext}"
+
+        try:
+            r2_upload(file.stream, trip_id, unique_name, content_type=file.mimetype)
+        except ClientError as e:
+            print(f"[R2 UPLOAD HATASI] {file.filename}: {e}")
+            errors.append(file.filename)
+            continue
+        except Exception as e:
+            print(f"[BEKLENMEYEN YÜKLEME HATASI] {file.filename}: {e}")
+            errors.append(file.filename)
+            continue
+
+        entry = {
+            "filename": unique_name,
+            "original_name": secure_filename(file.filename),
+            "type": media_type(unique_name),
+            "uploaded_by": user['username'],
+            "uploaded_at": datetime.utcnow().isoformat(),
+            "likes": [],
+            "comments": [],
         }
+        trip.setdefault('media', []).append(entry)
+        if not trip.get('cover') and entry['type'] == 'image':
+            trip['cover'] = unique_name
+        saved.append(entry)
 
-        btn.disabled = true;
-        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+    save_trips(trips)
 
-        try {
-            const res = await fetch('/api/trips', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, date, description })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                window.location.href = '/trip/' + data.trip.id;
-            } else {
-                showToast(data.message || 'Bir hata oluştu', 'error');
-                btn.disabled = false;
-                btnText.textContent = 'Albümü Oluştur';
-            }
-        } catch (err) {
-            showToast('Bağlantı hatası', 'error');
-            btn.disabled = false;
-            btnText.textContent = 'Albümü Oluştur';
-        }
+    if not saved:
+        if errors:
+            return jsonify({"status": "error", "message": f"Yüklenemedi: {', '.join(errors)} (terminaldeki hata mesajına bak)"}), 400
+        return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
+
+    return jsonify({"status": "success", "saved": saved, "errors": errors})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/delete', methods=['POST'])
+@login_required
+def delete_media(trip_id, filename):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = next((m for m in trip.get('media', []) if m['filename'] == filename), None)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    if entry['uploaded_by'] != user['username'] and trip['created_by'] != user['username']:
+        return jsonify({"status": "error", "message": "Bu anıyı sadece ekleyen kişi veya albümü oluşturan silebilir"}), 403
+
+    trip['media'] = [m for m in trip['media'] if m['filename'] != filename]
+    if trip.get('cover') == filename:
+        next_cover = next((m['filename'] for m in trip['media'] if m['type'] == 'image'), None)
+        trip['cover'] = next_cover
+
+    save_trips(trips)
+
+    r2_delete(trip_id, filename)
+
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Beğeni & Yorum API (fotoğraf/video anılarına)
+# ---------------------------------------------------------------------------
+@app.route('/api/trips/<trip_id>/media/<filename>/like', methods=['POST'])
+@login_required
+def toggle_like(trip_id, filename):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    likes = entry['likes']
+    if user['username'] in likes:
+        likes.remove(user['username'])
+        liked = False
+    else:
+        likes.append(user['username'])
+        liked = True
+
+    save_trips(trips)
+    return jsonify({"status": "success", "liked": liked, "like_count": len(likes)})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/comments', methods=['POST'])
+@login_required
+def add_comment(trip_id, filename):
+    user = current_user()
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()
+
+    if not text:
+        return jsonify({"status": "error", "message": "Yorum boş olamaz"}), 400
+    if len(text) > 500:
+        return jsonify({"status": "error", "message": "Yorum çok uzun"}), 400
+
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    comment = {
+        "id": uuid.uuid4().hex[:10],
+        "username": user['username'],
+        "text": text,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    entry['comments'].append(comment)
+    save_trips(trips)
+
+    return jsonify({"status": "success", "comment": comment})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/comments/<comment_id>/delete', methods=['POST'])
+@login_required
+def delete_comment(trip_id, filename, comment_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    comment = next((c for c in entry['comments'] if c['id'] == comment_id), None)
+    if not comment:
+        return jsonify({"status": "error", "message": "Yorum bulunamadı"}), 404
+
+    if comment['username'] != user['username'] and trip['created_by'] != user['username']:
+        return jsonify({"status": "error", "message": "Bu yorumu sadece yazan kişi veya albümü oluşturan silebilir"}), 403
+
+    entry['comments'] = [c for c in entry['comments'] if c['id'] != comment_id]
+    save_trips(trips)
+
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Yaklaşan Etkinlikler API
+# ---------------------------------------------------------------------------
+@app.route('/api/events', methods=['POST'])
+@login_required
+def create_event():
+    user = current_user()
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    date = (data.get('date') or '').strip()
+    time = (data.get('time') or '').strip()
+    location = (data.get('location') or '').strip()
+
+    if not title or not date:
+        return jsonify({"status": "error", "message": "Başlık ve tarih gerekli"}), 400
+
+    event = {
+        "id": uuid.uuid4().hex[:12],
+        "title": title,
+        "date": date,
+        "time": time,
+        "location": location,
+        "created_by": user['username'],
+        "created_at": datetime.utcnow().isoformat(),
     }
 
-    async function logout() {
-        try {
-            const response = await fetch('/logout', { method: 'POST' });
-            if (response.ok) window.location.reload();
-        } catch (err) {
-            showToast('Çıkış yapılamadı', 'error');
-        }
-    }
+    if event_datetime(event) is None:
+        return jsonify({"status": "error", "message": "Geçersiz tarih/saat"}), 400
 
-    // --- Etkinlikler ---
-    function openEventModal() {
-        document.getElementById('event-modal').classList.remove('hidden');
-        document.getElementById('event-error-msg').classList.add('hidden');
-        document.getElementById('event-title').focus();
-    }
-    function closeEventModal() {
-        document.getElementById('event-modal').classList.add('hidden');
-    }
-    document.getElementById('event-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'event-modal') closeEventModal();
-    });
+    events = load_events()
+    events.append(event)
+    save_events(events)
+    return jsonify({"status": "success", "event": event})
 
-    async function submitNewEvent() {
-        const titleEl = document.getElementById('event-title');
-        const dateEl = document.getElementById('event-date');
-        const timeEl = document.getElementById('event-time');
-        const locationEl = document.getElementById('event-location');
-        const errorMsg = document.getElementById('event-error-msg');
-        const btn = document.getElementById('create-event-btn');
-        const btnText = document.getElementById('create-event-btn-text');
 
-        errorMsg.classList.add('hidden');
+@app.route('/api/events/<event_id>/delete', methods=['POST'])
+@login_required
+def delete_event(event_id):
+    user = current_user()
+    events = load_events()
+    event = next((e for e in events if e['id'] == event_id), None)
+    if not event:
+        return jsonify({"status": "error", "message": "Etkinlik bulunamadı"}), 404
 
-        const title = (titleEl.value || '').trim();
-        const date = (dateEl.value || '').trim();
-        const time = (timeEl.value || '').trim();
-        const location = (locationEl.value || '').trim();
+    if event['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Sadece etkinliği ekleyen kişi silebilir"}), 403
 
-        if (!title || !date) {
-            errorMsg.textContent = !date
-                ? 'Tarih alanı boş görünüyor. Takvim simgesine tıklayıp tarihi seçmeyi dene.'
-                : 'Başlık gerekli.';
-            errorMsg.classList.remove('hidden');
-            return;
-        }
+    events.remove(event)
+    save_events(events)
+    return jsonify({"status": "success"})
 
-        btn.disabled = true;
-        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
 
-        try {
-            const res = await fetch('/api/events', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, date, time, location })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-                queueToast('Etkinlik eklendi', 'success');
-                window.location.reload();
-            } else {
-                console.error('submitNewEvent failed:', res.status, data);
-                errorMsg.textContent = data.message || `Bir hata oluştu (${res.status})`;
-                errorMsg.classList.remove('hidden');
-                btn.disabled = false;
-                btnText.textContent = 'Etkinliği Ekle';
-            }
-        } catch (err) {
-            console.error('submitNewEvent network error:', err);
-            errorMsg.textContent = 'Bağlantı hatası, tekrar dene.';
-            errorMsg.classList.remove('hidden');
-            btn.disabled = false;
-            btnText.textContent = 'Etkinliği Ekle';
-        }
-    }
+# ---------------------------------------------------------------------------
+# Korumalı medya servis — R2'den okuyup Flask üzerinden akıtır (proxy).
+# Böylece dosyalar herkese açık değildir, sadece giriş yapanlar görebilir.
+# ---------------------------------------------------------------------------
+@app.route('/uploads/<trip_id>/<filename>')
+@login_required
+def serve_file(trip_id, filename):
+    try:
+        obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=r2_key(trip_id, filename))
+    except ClientError:
+        abort(404)
 
-    async function deleteEvent(eventId) {
-        if (!confirm('Bu etkinliği silmek istediğine emin misin?')) return;
-        try {
-            const res = await fetch(`/api/events/${eventId}/delete`, { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                queueToast('Etkinlik silindi', 'success');
-                window.location.reload();
-            } else {
-                showToast(data.message || 'Silinemedi', 'error');
-            }
-        } catch (err) {
-            showToast('Bağlantı hatası', 'error');
-        }
-    }
+    content_type = obj.get('ContentType', 'application/octet-stream')
+    content_length = obj.get('ContentLength')
 
-    // Etkinlik kartlarındaki kısa geri sayım metni
-    function formatChip(diff) {
-        if (diff <= 0) return 'Başladı';
-        const days = Math.floor(diff / 86400000);
-        const hours = Math.floor((diff % 86400000) / 3600000);
-        if (days > 0) return `${days} gün ${hours} saat kaldı`;
-        const mins = Math.floor((diff % 3600000) / 60000);
-        if (hours > 0) return `${hours} saat ${mins} dk kaldı`;
-        const secs = Math.floor((diff % 60000) / 1000);
-        return `${mins} dk ${secs} sn kaldı`;
-    }
-    function tickChips() {
-        document.querySelectorAll('.countdown-chip').forEach(chip => {
-            const target = new Date(chip.dataset.target);
-            chip.textContent = formatChip(target - new Date());
-        });
-    }
-    if (document.querySelector('.countdown-chip')) {
-        tickChips();
-        setInterval(tickChips, 1000);
-    }
-</script>
-{% endblock %}
+    headers = {}
+    if content_length is not None:
+        headers['Content-Length'] = str(content_length)
+
+    return Response(
+        stream_with_context(obj['Body'].iter_chunks(chunk_size=65536)),
+        mimetype=content_type,
+        headers=headers,
+    )
+
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
