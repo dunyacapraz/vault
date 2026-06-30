@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Vault | Ortak Anılar{% endblock %}</title>
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('vault-theme');
+                if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,19 +21,64 @@
     <style>
         :root {
             --ink: #131316;
-            --paper: #f6f6f5;
+            --paper: #eeeeec;
             --amber: #2c5cf6;
             --amber-deep: #1d3fc4;
             --moss: #1f8a5f;
-            --line: #e4e4e3;
+            --line: #dcdcda;
+            --surface: #ffffff;
         }
-        body { font-family: 'Inter', sans-serif; background-color: var(--paper); color: var(--ink); }
+        html.dark {
+            --ink: #f1f1f0;
+            --paper: #131316;
+            --amber: #5b82ff;
+            --amber-deep: #7c9bff;
+            --moss: #34b87a;
+            --line: #2c2c30;
+            --surface: #1c1c20;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--paper); color: var(--ink); transition: background-color .2s ease, color .2s ease; }
         .font-display { font-family: 'Inter', sans-serif; letter-spacing: -0.03em; font-weight: 700; }
         .font-mono { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.01em; }
+
+        /* Karanlık mod: ortak Tailwind yardımcı sınıflarını ezerek tüm sayfalara uygula */
+        html.dark .bg-white,
+        html.dark .bg-white\/90,
+        html.dark .bg-white\/95,
+        html.dark .bg-white\/60,
+        html.dark .bg-white\/40 { background-color: var(--surface) !important; }
+        html.dark .bg-stone-50,
+        html.dark .bg-stone-100,
+        html.dark .bg-stone-200 { background-color: #232328 !important; }
+        html.dark .border-stone-200,
+        html.dark .border-stone-300 { border-color: var(--line) !important; }
+        html.dark .text-stone-300 { color: #6f6f76 !important; }
+        html.dark .text-stone-400 { color: #87878e !important; }
+        html.dark .text-stone-500 { color: #9c9ca3 !important; }
+        html.dark .text-stone-600 { color: #b4b4ba !important; }
+        html.dark .text-stone-700 { color: #d6d6da !important; }
+        html.dark .text-stone-800 { color: #ececee !important; }
+        html.dark .bg-\[var\(--ink\)\] { background-color: #1c1c20 !important; }
+        html.dark input,
+        html.dark textarea { background-color: var(--surface); color: var(--ink); }
+        html.dark ::placeholder { color: #6f6f76; }
+        html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow-xl {
+            box-shadow: 0 8px 20px -10px rgba(0,0,0,.5) !important;
+        }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #d4d4d3; border-radius: 999px; }
         ::-webkit-scrollbar-track { background: transparent; }
+
+        .theme-toggle {
+            position: fixed; bottom: 18px; right: 18px; z-index: 90;
+            height: 42px; width: 42px; border-radius: 999px;
+            background: var(--surface); border: 1px solid var(--line);
+            box-shadow: 0 6px 16px -8px rgba(0,0,0,.25);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--ink); cursor: pointer; transition: transform .15s ease, background-color .2s ease;
+        }
+        .theme-toggle:active { transform: scale(.94); }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(8px); }
@@ -120,12 +175,29 @@
     {% block head %}{% endblock %}
 </head>
 <body class="antialiased min-h-screen">
+    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Görünümü değiştir">
+        <i id="theme-toggle-icon" class="fa-solid fa-moon text-sm"></i>
+    </button>
+
     {% block content %}{% endblock %}
 
     <!-- Toast bildirim alanı -->
     <div id="toast-container" class="fixed top-5 right-5 z-[100] flex flex-col gap-2 items-end"></div>
 
     <script>
+        function setThemeIcon() {
+            const icon = document.getElementById('theme-toggle-icon');
+            const isDark = document.documentElement.classList.contains('dark');
+            icon.className = isDark ? 'fa-solid fa-sun text-sm' : 'fa-solid fa-moon text-sm';
+        }
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            try { localStorage.setItem('vault-theme', html.classList.contains('dark') ? 'dark' : 'light'); } catch (e) {}
+            setThemeIcon();
+        }
+        setThemeIcon();
+
         // Sayfa yenilemeleri arasında bildirim göstermek için (ör. yükleme/silme sonrası reload)
         document.addEventListener('DOMContentLoaded', () => {
             const pending = sessionStorage.getItem('pending_toast');
@@ -147,7 +219,7 @@
             const palette = {
                 success: { bg: 'bg-[var(--moss)]', icon: 'fa-circle-check' },
                 error:   { bg: 'bg-red-700',        icon: 'fa-circle-exclamation' },
-                info:    { bg: 'bg-[var(--ink)]',   icon: 'fa-circle-info' },
+                info:    { bg: 'bg-stone-900',      icon: 'fa-circle-info' },
             }[type] || {};
             toast.className = `anim-slide ${palette.bg} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium max-w-xs`;
             toast.innerHTML = `<i class="fa-solid ${palette.icon}"></i><span>${message}</span>`;
