@@ -20,6 +20,14 @@
                 </div>
                 <span class="font-medium">{{ user.name }}</span>
             </div>
+            {% if user.is_admin %}
+            <a href="/admin" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Admin Paneli">
+                <i class="fa-solid fa-user-shield"></i>
+            </a>
+            {% endif %}
+            <a href="/account" class="btn-press text-stone-500 hover:text-stone-800 hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Hesap Ayarları">
+                <i class="fa-solid fa-gear"></i>
+            </a>
             <button onclick="logout()" class="btn-press text-stone-500 hover:text-red-600 hover:bg-red-50 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Çıkış Yap">
                 <i class="fa-solid fa-arrow-right-from-bracket"></i>
             </button>
