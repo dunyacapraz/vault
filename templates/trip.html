@@ -372,6 +372,11 @@
             });
             const data = await res.json();
             if (res.ok) {
+                if (item.memory_date !== memory_date) {
+                    queueToast('Anı güncellendi', 'success');
+                    window.location.reload();
+                    return;
+                }
                 item.caption = caption;
                 item.memory_date = memory_date;
                 document.getElementById('lightbox-edit-form').classList.add('hidden');
