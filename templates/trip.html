@@ -107,6 +107,7 @@
                     <i id="lightbox-like-icon" class="fa-regular fa-heart"></i>
                     <span id="lightbox-like-count">0</span>
                 </button>
+                <button id="lightbox-set-cover" onclick="setCurrentAsCover()" class="hover:text-[var(--amber)]" title="Kapak fotoğrafı yap"><i class="fa-regular fa-image"></i></button>
                 <a id="lightbox-download" href="#" download class="hover:text-white" title="İndir"><i class="fa-solid fa-download"></i></a>
                 <button id="lightbox-delete" onclick="deleteCurrentMedia()" class="hover:text-red-400" title="Sil"><i class="fa-regular fa-trash-can"></i></button>
             </div>
@@ -132,7 +133,9 @@
     const TRIP_ID = "{{ trip.id }}";
     const TRIP_TITLE = {{ trip.title|tojson }};
     const CURRENT_USER = "{{ user.username }}";
+    const IS_ADMIN = {{ user.is_admin|tojson }};
     const TRIP_CREATOR = "{{ trip.created_by }}";
+    let TRIP_COVER = {{ trip.cover|tojson }};
     const MEDIA = {{ media|tojson }};
     const USERS_MAP = {{ users|tojson }};
     let lightboxIndex = 0;
@@ -247,6 +250,14 @@
         const deleteBtn = document.getElementById('lightbox-delete');
         const canDelete = item.uploaded_by === CURRENT_USER || TRIP_CREATOR === CURRENT_USER;
         deleteBtn.style.display = canDelete ? 'inline-flex' : 'none';
+
+        const coverBtn = document.getElementById('lightbox-set-cover');
+        const canSetCover = (TRIP_CREATOR === CURRENT_USER || IS_ADMIN) && item.type === 'image';
+        coverBtn.style.display = canSetCover ? 'inline-flex' : 'none';
+        const coverIcon = coverBtn.querySelector('i');
+        const isCurrentCover = TRIP_COVER === item.filename;
+        coverIcon.className = isCurrentCover ? 'fa-solid fa-image text-[var(--amber)]' : 'fa-regular fa-image';
+        coverBtn.title = isCurrentCover ? 'Bu, albümün kapağı' : 'Kapak fotoğrafı yap';
 
         renderLikeState();
         renderComments();
@@ -364,6 +375,24 @@
     document.getElementById('lightbox').addEventListener('click', (e) => {
         if (e.target.id === 'lightbox') closeLightbox();
     });
+
+    async function setCurrentAsCover() {
+        const item = MEDIA[lightboxIndex];
+        if (TRIP_COVER === item.filename) return;
+        try {
+            const res = await fetch(`/api/trips/${TRIP_ID}/media/${item.filename}/set-cover`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                TRIP_COVER = item.filename;
+                renderLightbox();
+                queueToast('Kapak fotoğrafı güncellendi', 'success');
+            } else {
+                showToast(data.message || 'Kapak ayarlanamadı', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
 
     async function deleteCurrentMedia() {
         const item = MEDIA[lightboxIndex];
