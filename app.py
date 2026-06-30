@@ -114,7 +114,7 @@ def r2_write_json(key, data):
 # (R2 üzerinde) kalıcı olarak eklenir.
 # ---------------------------------------------------------------------------
 DEFAULT_USERS = {
-    "admin":  {"password": os.environ.get('PW_ADMIN', '1234'),        "name": "Admin",  "avatar_color": "#0f172a", "is_admin": True},
+    "admin":  {"password": os.environ.get('PW_ADMIN', 'dunya3461'),   "name": "Admin",  "avatar_color": "#0f172a", "is_admin": True},
     "ayse":   {"password": os.environ.get('PW_AYSE', 'ayse2026'),     "name": "Ayşe",   "avatar_color": "#be185d", "is_admin": False},
     "mehmet": {"password": os.environ.get('PW_MEHMET', 'mehmet2026'), "name": "Mehmet", "avatar_color": "#1d4ed8", "is_admin": False},
     "zeynep": {"password": os.environ.get('PW_ZEYNEP', 'zeynep2026'), "name": "Zeynep", "avatar_color": "#15803d", "is_admin": False},
@@ -615,6 +615,31 @@ def delete_media(trip_id, filename):
     r2_delete(trip_id, filename)
 
     return jsonify({"status": "success"})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/set-cover', methods=['POST'])
+@login_required
+def set_cover(trip_id, filename):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    if trip['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Kapak fotoğrafını sadece albümü oluşturan veya admin değiştirebilir"}), 403
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    if entry['type'] != 'image':
+        return jsonify({"status": "error", "message": "Sadece fotoğraf kapak olarak seçilebilir"}), 400
+
+    trip['cover'] = filename
+    save_trips(trips)
+
+    return jsonify({"status": "success", "cover": filename})
 
 
 # ---------------------------------------------------------------------------
