@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Vault | Admin Paneli{% endblock %}
+{% block content %}
+<div class="min-h-screen">
+    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-20 px-5 sm:px-8 py-5 border-b border-[var(--line)] anim-fade">
+        <div class="max-w-5xl mx-auto flex items-center gap-3">
+            <a href="/" class="btn-press h-10 w-10 rounded-lg flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors shrink-0">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="font-display text-2xl font-semibold tracking-tight">Admin Paneli</h1>
+                <p class="text-xs text-stone-500">Sadece adminlerin görebildiği yönetim ekranı</p>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-5 sm:px-8 py-8 max-w-5xl mx-auto space-y-10">
+
+        <!-- Referans Kodu -->
+        <section class="anim-fade-up bg-white border border-[var(--line)] rounded-2xl p-6">
+            <h2 class="font-display text-lg font-semibold mb-1">Referans Kodu</h2>
+            <p class="text-sm text-stone-500 mb-3">Yeni üyelerin kayıt olurken girmesi gereken kod.</p>
+            <div class="font-mono text-sm bg-stone-50 border border-[var(--line)] rounded-lg px-4 py-2.5 inline-block">{{ referral_code }}</div>
+            <p class="text-xs text-stone-400 mt-2">Değiştirmek için sunucudaki <code class="font-mono">REFERRAL_CODE</code> ortam değişkenini güncelle.</p>
+        </section>
+
+        <!-- Üyeler -->
+        <section class="anim-fade-up">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-display text-lg font-semibold">Üyeler <span class="text-stone-400 font-normal text-sm">({{ users|length }})</span></h2>
+            </div>
+            <div class="bg-white border border-[var(--line)] rounded-2xl overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-stone-400 text-xs uppercase tracking-wide border-b border-[var(--line)]">
+                            <th class="px-4 py-3 font-medium">Üye</th>
+                            <th class="px-4 py-3 font-medium">Kullanıcı Adı</th>
+                            <th class="px-4 py-3 font-medium">Rol</th>
+                            <th class="px-4 py-3 font-medium text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        {% for uname, info in users.items() %}
+                        <tr class="border-b border-[var(--line)] last:border-0" data-username="{{ uname }}">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="h-7 w-7 rounded-full inline-flex items-center justify-center text-white text-xs font-bold shrink-0"
+                                          style="background-color: {{ info.avatar_color }}">{{ info.name[0] }}</span>
+                                    {{ info.name }}
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 font-mono text-stone-500">@{{ uname }}</td>
+                            <td class="px-4 py-3">
+                                {% if info.is_admin %}
+                                <span class="text-[11px] font-semibold text-[var(--amber-deep)] bg-indigo-50 px-2 py-0.5 rounded-full">Admin</span>
+                                {% else %}
+                                <span class="text-[11px] text-stone-400">Üye</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                {% if uname != user.username %}
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button onclick="toggleAdmin('{{ uname }}')" class="btn-press text-xs text-stone-500 hover:bg-stone-100 px-2.5 py-1.5 rounded-lg" title="Admin yetkisini aç/kapat">
+                                        <i class="fa-solid fa-user-shield"></i>
+                                    </button>
+                                    <button onclick="resetPassword('{{ uname }}')" class="btn-press text-xs text-stone-500 hover:bg-stone-100 px-2.5 py-1.5 rounded-lg" title="Şifre sıfırla">
+                                        <i class="fa-solid fa-key"></i>
+                                    </button>
+                                    <button onclick="deleteUser('{{ uname }}')" class="btn-press text-xs text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg" title="Üyeyi sil">
+                                        <i class="fa-regular fa-trash-can"></i>
+                                    </button>
+                                </div>
+                                {% else %}
+                                <span class="text-[11px] text-stone-300">sen</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Albümler -->
+        <section class="anim-fade-up">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-display text-lg font-semibold">Albümler <span class="text-stone-400 font-normal text-sm">({{ trips|length }})</span></h2>
+            </div>
+            <div class="bg-white border border-[var(--line)] rounded-2xl overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-stone-400 text-xs uppercase tracking-wide border-b border-[var(--line)]">
+                            <th class="px-4 py-3 font-medium">Başlık</th>
+                            <th class="px-4 py-3 font-medium">Oluşturan</th>
+                            <th class="px-4 py-3 font-medium">Anı Sayısı</th>
+                            <th class="px-4 py-3 font-medium text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trips-table-body">
+                        {% for trip in trips %}
+                        <tr class="border-b border-[var(--line)] last:border-0" data-trip-id="{{ trip.id }}">
+                            <td class="px-4 py-3"><a href="/trip/{{ trip.id }}" class="hover:text-[var(--amber-deep)] font-medium">{{ trip.title }}</a></td>
+                            <td class="px-4 py-3 font-mono text-stone-500">@{{ trip.created_by }}</td>
+                            <td class="px-4 py-3 text-stone-500">{{ trip.media|length }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <button onclick="deleteTrip('{{ trip.id }}')" class="btn-press text-xs text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg" title="Albümü sil">
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Etkinlikler -->
+        <section class="anim-fade-up">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="font-display text-lg font-semibold">Etkinlikler <span class="text-stone-400 font-normal text-sm">({{ events|length }})</span></h2>
+            </div>
+            <div class="bg-white border border-[var(--line)] rounded-2xl overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-stone-400 text-xs uppercase tracking-wide border-b border-[var(--line)]">
+                            <th class="px-4 py-3 font-medium">Başlık</th>
+                            <th class="px-4 py-3 font-medium">Tarih</th>
+                            <th class="px-4 py-3 font-medium">Oluşturan</th>
+                            <th class="px-4 py-3 font-medium text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-table-body">
+                        {% for ev in events %}
+                        <tr class="border-b border-[var(--line)] last:border-0" data-event-id="{{ ev.id }}">
+                            <td class="px-4 py-3 font-medium">{{ ev.title }}</td>
+                            <td class="px-4 py-3 text-stone-500">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</td>
+                            <td class="px-4 py-3 font-mono text-stone-500">@{{ ev.created_by }}</td>
+                            <td class="px-4 py-3 text-right">
+                                <button onclick="deleteEventAdmin('{{ ev.id }}')" class="btn-press text-xs text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg" title="Etkinliği sil">
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function deleteUser(username) {
+        if (!confirm(`@${username} kullanıcısını silmek istediğine emin misin? Bu işlem geri alınamaz.`)) return;
+        try {
+            const res = await fetch(`/api/admin/users/${username}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                document.querySelector(`tr[data-username="${username}"]`).remove();
+                showToast('Üye silindi', 'success');
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function toggleAdmin(username) {
+        if (!confirm(`@${username} için admin yetkisini değiştirmek istediğine emin misin?`)) return;
+        try {
+            const res = await fetch(`/api/admin/users/${username}/toggle-admin`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('Rol güncellendi', 'success');
+                window.location.reload();
+            } else {
+                showToast(data.message || 'Güncellenemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function resetPassword(username) {
+        const newPassword = prompt(`@${username} için yeni şifre belirle (en az 4 karakter):`);
+        if (!newPassword) return;
+        try {
+            const res = await fetch(`/api/admin/users/${username}/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_password: newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('Şifre sıfırlandı', 'success');
+            } else {
+                showToast(data.message || 'Sıfırlanamadı', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function deleteTrip(tripId) {
+        if (!confirm('Bu albümü ve içindeki tüm anıları silmek istediğine emin misin?')) return;
+        try {
+            const res = await fetch(`/api/trips/${tripId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                document.querySelector(`tr[data-trip-id="${tripId}"]`).remove();
+                showToast('Albüm silindi', 'success');
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function deleteEventAdmin(eventId) {
+        if (!confirm('Bu etkinliği silmek istediğine emin misin?')) return;
+        try {
+            const res = await fetch(`/api/events/${eventId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                document.querySelector(`tr[data-event-id="${eventId}"]`).remove();
+                showToast('Etkinlik silindi', 'success');
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+</script>
+{% endblock %}
