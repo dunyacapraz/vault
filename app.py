@@ -168,6 +168,12 @@ def find_trip(trips, trip_id):
     return next((t for t in trips if t['id'] == trip_id), None)
 
 
+def media_sort_key(m):
+    """Sıralama için tarih anahtarı: kullanıcı 'anı tarihi' girdiyse onu, girmediyse
+    yükleme zamanını kullanır. Böylece yeni tarihliler üstte, eski tarihliler altta kalır."""
+    return m.get('memory_date') or m.get('uploaded_at', '')
+
+
 def find_media(trip, filename):
     entry = next((m for m in trip.get('media', []) if m['filename'] == filename), None)
     if entry is not None:
@@ -271,7 +277,7 @@ def trip_detail(trip_id):
     trip = find_trip(trips, trip_id)
     if not trip:
         abort(404)
-    media_sorted = sorted(trip.get('media', []), key=lambda m: m.get('uploaded_at', ''), reverse=True)
+    media_sorted = sorted(trip.get('media', []), key=media_sort_key, reverse=True)
     return render_template('trip.html', user=user, trip=trip, media=media_sorted, users=public_users())
 
 
