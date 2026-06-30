@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import random
 from datetime import datetime
 from functools import wraps
 
@@ -11,7 +12,7 @@ from dotenv import load_dotenv
 
 from flask import (
     Flask, render_template, request, session, jsonify,
-    abort, Response, stream_with_context
+    abort, Response, stream_with_context, redirect, url_for
 )
 from werkzeug.utils import secure_filename
 
@@ -21,9 +22,17 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'vault_secure_key_2026_change_me')
 
 BASE_DIR = os.path.dirname(__file__)
-DATA_FILE = os.path.join(BASE_DIR, 'data', 'trips.json')
-EVENTS_FILE = os.path.join(BASE_DIR, 'data', 'events.json')
-os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+META_TRIPS_KEY = "_meta/trips.json"
+META_EVENTS_KEY = "_meta/events.json"
+META_USERS_KEY = "_meta/users.json"
+
+# Yeni üyelik için gereken referans kodu (sadece bu kodu bilenler kayıt olabilir)
+REFERRAL_CODE = os.environ.get('REFERRAL_CODE', 'dunya3461')
+
+AVATAR_PALETTE = [
+    "#be185d", "#1d4ed8", "#15803d", "#b45309", "#7c3aed",
+    "#0e7490", "#c2410c", "#4d7c0f", "#9d174d", "#1e40af",
+]
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov', 'avi', 'webm'}
 VIDEO_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm'}
@@ -81,16 +90,48 @@ def r2_delete_prefix(trip_id):
         pass
 
 
+def r2_read_json(key, default):
+    """R2'den JSON oku. Yoksa varsayılan değeri döner (Render gibi disksiz ortamlarda kalıcılık için)."""
+    try:
+        obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=key)
+        return json.loads(obj['Body'].read().decode('utf-8'))
+    except ClientError as e:
+        if e.response.get('Error', {}).get('Code') in ('NoSuchKey', '404'):
+            return default
+        raise
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return default
+
+
+def r2_write_json(key, data):
+    body = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+    s3.put_object(Bucket=R2_BUCKET_NAME, Key=key, Body=body, ContentType='application/json')
+
+
 # ---------------------------------------------------------------------------
-# Sabit arkadaş listesi — yeni bir arkadaş eklemek için buraya bir satır ekle.
-# Şifreleri herkesin haberi olacak şekilde kendiniz belirleyip paylaşın.
+# Üyeler — başlangıçta birkaç sabit hesapla başlar, sonrasında /register
+# üzerinden referans kodu ile katılan herkes data/_meta/users.json içine
+# (R2 üzerinde) kalıcı olarak eklenir.
 # ---------------------------------------------------------------------------
-USERS = {
+DEFAULT_USERS = {
     "admin":  {"password": os.environ.get('PW_ADMIN', '1234'),        "name": "Admin",  "avatar_color": "#0f172a"},
     "ayse":   {"password": os.environ.get('PW_AYSE', 'ayse2026'),     "name": "Ayşe",   "avatar_color": "#be185d"},
     "mehmet": {"password": os.environ.get('PW_MEHMET', 'mehmet2026'), "name": "Mehmet", "avatar_color": "#1d4ed8"},
     "zeynep": {"password": os.environ.get('PW_ZEYNEP', 'zeynep2026'), "name": "Zeynep", "avatar_color": "#15803d"},
 }
+
+
+def load_users():
+    """Kayıtlı üyeleri R2'den okur. İlk çalıştırmada DEFAULT_USERS ile başlatır."""
+    users = r2_read_json(META_USERS_KEY, None)
+    if users is None:
+        users = dict(DEFAULT_USERS)
+        r2_write_json(META_USERS_KEY, users)
+    return users
+
+
+def save_users(users):
+    r2_write_json(META_USERS_KEY, users)
 
 
 # ---------------------------------------------------------------------------
@@ -106,37 +147,31 @@ def media_type(filename):
 
 
 def load_trips():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
+    return r2_read_json(META_TRIPS_KEY, [])
 
 
 def save_trips(trips):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(trips, f, ensure_ascii=False, indent=2)
+    r2_write_json(META_TRIPS_KEY, trips)
 
 
 def find_trip(trips, trip_id):
     return next((t for t in trips if t['id'] == trip_id), None)
 
 
+def find_media(trip, filename):
+    entry = next((m for m in trip.get('media', []) if m['filename'] == filename), None)
+    if entry is not None:
+        entry.setdefault('likes', [])
+        entry.setdefault('comments', [])
+    return entry
+
+
 def load_events():
-    if not os.path.exists(EVENTS_FILE):
-        return []
-    try:
-        with open(EVENTS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
+    return r2_read_json(META_EVENTS_KEY, [])
 
 
 def save_events(events):
-    with open(EVENTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(events, f, ensure_ascii=False, indent=2)
+    r2_write_json(META_EVENTS_KEY, events)
 
 
 def event_datetime(event):
@@ -157,14 +192,18 @@ def upcoming_events():
 
 
 def public_users():
-    return {u: {"name": info["name"], "avatar_color": info["avatar_color"]} for u, info in USERS.items()}
+    users = load_users()
+    return {u: {"name": info["name"], "avatar_color": info["avatar_color"]} for u, info in users.items()}
 
 
 def current_user():
     username = session.get('username')
-    if not username or username not in USERS:
+    if not username:
         return None
-    info = USERS[username]
+    users = load_users()
+    info = users.get(username)
+    if not info:
+        return None
     return {"username": username, "name": info["name"], "avatar_color": info["avatar_color"]}
 
 
@@ -216,11 +255,54 @@ def login():
     username = (data.get('username') or '').strip().lower()
     password = data.get('password') or ''
 
-    user = USERS.get(username)
+    users = load_users()
+    user = users.get(username)
     if user and user['password'] == password:
         session['username'] = username
         return jsonify({"status": "success", "name": user['name']})
     return jsonify({"status": "error", "message": "Hatalı kullanıcı adı veya şifre"}), 401
+
+
+@app.route('/register', methods=['GET'])
+def register_page():
+    if current_user():
+        return redirect(url_for('index'))
+    return render_template('register.html')
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip().lower()
+    password = data.get('password') or ''
+    name = (data.get('name') or '').strip()
+    referral_code = (data.get('referral_code') or '').strip()
+
+    if not username or not password or not name:
+        return jsonify({"status": "error", "message": "Kullanıcı adı, şifre ve isim gerekli"}), 400
+
+    if not username.replace('_', '').isalnum():
+        return jsonify({"status": "error", "message": "Kullanıcı adı sadece harf, rakam ve alt çizgi içerebilir"}), 400
+
+    if len(password) < 4:
+        return jsonify({"status": "error", "message": "Şifre en az 4 karakter olmalı"}), 400
+
+    if referral_code != REFERRAL_CODE:
+        return jsonify({"status": "error", "message": "Referans kodu hatalı"}), 403
+
+    users = load_users()
+    if username in users:
+        return jsonify({"status": "error", "message": "Bu kullanıcı adı zaten alınmış"}), 409
+
+    users[username] = {
+        "password": password,
+        "name": name,
+        "avatar_color": random.choice(AVATAR_PALETTE),
+    }
+    save_users(users)
+
+    session['username'] = username
+    return jsonify({"status": "success", "name": name})
 
 
 @app.route('/logout', methods=['POST'])
@@ -310,7 +392,12 @@ def upload_media(trip_id):
 
         try:
             r2_upload(file.stream, trip_id, unique_name, content_type=file.mimetype)
-        except ClientError:
+        except ClientError as e:
+            print(f"[R2 UPLOAD HATASI] {file.filename}: {e}")
+            errors.append(file.filename)
+            continue
+        except Exception as e:
+            print(f"[BEKLENMEYEN YÜKLEME HATASI] {file.filename}: {e}")
             errors.append(file.filename)
             continue
 
@@ -320,6 +407,8 @@ def upload_media(trip_id):
             "type": media_type(unique_name),
             "uploaded_by": user['username'],
             "uploaded_at": datetime.utcnow().isoformat(),
+            "likes": [],
+            "comments": [],
         }
         trip.setdefault('media', []).append(entry)
         if not trip.get('cover') and entry['type'] == 'image':
@@ -329,6 +418,8 @@ def upload_media(trip_id):
     save_trips(trips)
 
     if not saved:
+        if errors:
+            return jsonify({"status": "error", "message": f"Yüklenemedi: {', '.join(errors)} (terminaldeki hata mesajına bak)"}), 400
         return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
 
     return jsonify({"status": "success", "saved": saved, "errors": errors})
@@ -358,6 +449,93 @@ def delete_media(trip_id, filename):
     save_trips(trips)
 
     r2_delete(trip_id, filename)
+
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Beğeni & Yorum API (fotoğraf/video anılarına)
+# ---------------------------------------------------------------------------
+@app.route('/api/trips/<trip_id>/media/<filename>/like', methods=['POST'])
+@login_required
+def toggle_like(trip_id, filename):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    likes = entry['likes']
+    if user['username'] in likes:
+        likes.remove(user['username'])
+        liked = False
+    else:
+        likes.append(user['username'])
+        liked = True
+
+    save_trips(trips)
+    return jsonify({"status": "success", "liked": liked, "like_count": len(likes)})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/comments', methods=['POST'])
+@login_required
+def add_comment(trip_id, filename):
+    user = current_user()
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()
+
+    if not text:
+        return jsonify({"status": "error", "message": "Yorum boş olamaz"}), 400
+    if len(text) > 500:
+        return jsonify({"status": "error", "message": "Yorum çok uzun"}), 400
+
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    comment = {
+        "id": uuid.uuid4().hex[:10],
+        "username": user['username'],
+        "text": text,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    entry['comments'].append(comment)
+    save_trips(trips)
+
+    return jsonify({"status": "success", "comment": comment})
+
+
+@app.route('/api/trips/<trip_id>/media/<filename>/comments/<comment_id>/delete', methods=['POST'])
+@login_required
+def delete_comment(trip_id, filename, comment_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({"status": "error", "message": "Albüm bulunamadı"}), 404
+
+    entry = find_media(trip, filename)
+    if not entry:
+        return jsonify({"status": "error", "message": "Dosya bulunamadı"}), 404
+
+    comment = next((c for c in entry['comments'] if c['id'] == comment_id), None)
+    if not comment:
+        return jsonify({"status": "error", "message": "Yorum bulunamadı"}), 404
+
+    if comment['username'] != user['username'] and trip['created_by'] != user['username']:
+        return jsonify({"status": "error", "message": "Bu yorumu sadece yazan kişi veya albümü oluşturan silebilir"}), 403
+
+    entry['comments'] = [c for c in entry['comments'] if c['id'] != comment_id]
+    save_trips(trips)
 
     return jsonify({"status": "success"})
 
