@@ -189,6 +189,13 @@
 
     {% block content %}{% endblock %}
 
+    <!-- Pull-to-refresh göstergesi (standalone PWA'da native pull-to-refresh yok) -->
+    <div id="ptr-indicator" style="position:fixed; top:0; left:0; right:0; display:flex; justify-content:center; align-items:flex-end; height:0; overflow:hidden; z-index:200; transition:height .15s ease; pointer-events:none;">
+        <div style="padding:10px 0;">
+            <i id="ptr-icon" class="fa-solid fa-arrow-down" style="color:var(--amber-deep); font-size:18px; transition:transform .15s ease;"></i>
+        </div>
+    </div>
+
     <!-- Toast bildirim alanı -->
     <div id="toast-container" class="fixed top-5 right-5 z-[100] flex flex-col gap-2 items-end"></div>
 
@@ -206,7 +213,48 @@
         }
         setThemeIcon();
 
-        // Sayfa yenilemeleri arasında bildirim göstermek için (ör. yükleme/silme sonrası reload)
+        // --- Pull-to-refresh (standalone PWA'da native destek yok, elle uyguluyoruz) ---
+        (function () {
+            const indicator = document.getElementById('ptr-indicator');
+            const icon = document.getElementById('ptr-icon');
+            const THRESHOLD = 70;
+            let startY = 0;
+            let pulling = false;
+            let refreshing = false;
+
+            document.addEventListener('touchstart', (e) => {
+                if (window.scrollY === 0 && !refreshing) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                } else {
+                    pulling = false;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!pulling || refreshing) return;
+                const diff = e.touches[0].clientY - startY;
+                if (diff > 0 && window.scrollY === 0) {
+                    const height = Math.min(diff * 0.5, 90);
+                    indicator.style.height = height + 'px';
+                    icon.style.transform = diff * 0.5 >= THRESHOLD ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchend', () => {
+                if (!pulling || refreshing) return;
+                pulling = false;
+                const currentHeight = parseInt(indicator.style.height || '0', 10);
+                if (currentHeight >= THRESHOLD) {
+                    refreshing = true;
+                    indicator.style.height = '50px';
+                    icon.className = 'fa-solid fa-spinner fa-spin';
+                    window.location.reload();
+                } else {
+                    indicator.style.height = '0px';
+                }
+            }, { passive: true });
+        })();
         document.addEventListener('DOMContentLoaded', () => {
             const pending = sessionStorage.getItem('pending_toast');
             if (pending) {
