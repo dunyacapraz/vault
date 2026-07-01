@@ -4,6 +4,7 @@ import uuid
 import random
 import zipfile
 import tempfile
+import subprocess
 import re
 from datetime import datetime, timedelta
 from functools import wraps
@@ -29,6 +30,14 @@ load_dotenv()  # .env dosyasındaki değişkenleri oku
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'vault_secure_key_2026_change_me')
+# Tek bir istekte (birden çok dosya birlikte gönderilse bile) toplam üst sınır.
+# Dosya başına asıl sınırlar (10MB foto / 50MB video) upload_media içinde kontrol edilir.
+app.config['MAX_CONTENT_LENGTH'] = 400 * 1024 * 1024
+
+
+@app.errorhandler(413)
+def handle_too_large(e):
+    return jsonify({"status": "error", "message": "Yüklemeye çalıştığın dosya(lar) çok büyük."}), 413
 
 # Oturum çerezini kalıcı yapıyoruz — aksi halde iOS'ta PWA kapatılıp
 # yeniden açıldığında (uygulama arka planda sonlandırılınca) "session cookie"
@@ -198,6 +207,92 @@ def allowed_file(filename):
 def media_type(filename):
     ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
     return 'video' if ext in VIDEO_EXTENSIONS else 'image'
+
+
+# ---------------------------------------------------------------------------
+# Dosya boyutu sınırları
+# ---------------------------------------------------------------------------
+IMAGE_MAX_BYTES = 10 * 1024 * 1024   # 10 MB
+VIDEO_MAX_BYTES = 50 * 1024 * 1024   # 50 MB
+
+
+def human_mb(num_bytes):
+    return f"{num_bytes / (1024 * 1024):.1f}MB"
+
+
+def file_size(file_storage):
+    file_storage.stream.seek(0, os.SEEK_END)
+    size = file_storage.stream.tell()
+    file_storage.stream.seek(0)
+    return size
+
+
+def ffmpeg_available():
+    try:
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, timeout=10)
+        return True
+    except Exception:
+        return False
+
+
+def get_video_height(path):
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=height', '-of', 'csv=p=0', path],
+            capture_output=True, text=True, timeout=30,
+        )
+        return int(result.stdout.strip())
+    except Exception:
+        return None
+
+
+def get_video_duration(path):
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path],
+            capture_output=True, text=True, timeout=30,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return None
+
+
+def compress_video(input_path, output_path, target_bytes):
+    """Videoyu, hedef boyutun altına inecek şekilde bit hızını ve çözünürlüğü
+    düşürerek sıkıştırır. Başarılı olursa True döner."""
+    duration = get_video_duration(input_path)
+    if not duration or duration <= 0:
+        return False
+
+    audio_bitrate = 96_000
+    target_bits = target_bytes * 8 * 0.9  # konteyner payı bırak
+    video_bitrate = int(target_bits / duration) - audio_bitrate
+    if video_bitrate < 200_000:
+        video_bitrate = 200_000
+
+    cmd = [
+        'ffmpeg', '-y', '-i', input_path,
+        '-c:v', 'libx264', '-preset', 'veryfast',
+        '-b:v', str(video_bitrate),
+        '-maxrate', str(int(video_bitrate * 1.2)),
+        '-bufsize', str(int(video_bitrate * 2)),
+        '-c:a', 'aac', '-b:a', '96k',
+        '-movflags', '+faststart',
+    ]
+
+    height = get_video_height(input_path)
+    if height and height > 720:
+        cmd += ['-vf', 'scale=-2:720']
+
+    cmd.append(output_path)
+
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=900)
+        return os.path.exists(output_path) and os.path.getsize(output_path) > 0
+    except Exception as e:
+        print(f"[VIDEO SIKISTIRMA HATASI] {e}")
+        return False
 
 
 def load_trips():
@@ -837,14 +932,55 @@ def upload_media(trip_id):
         if not file or file.filename == '':
             continue
         if not allowed_file(file.filename):
-            errors.append(file.filename)
+            errors.append(f"{file.filename} (desteklenmeyen format)")
             continue
 
         ext = file.filename.rsplit('.', 1)[1].lower()
+        kind = media_type(file.filename)
+        size = file_size(file)
+
+        if kind == 'image' and size > IMAGE_MAX_BYTES:
+            errors.append(f"{file.filename} (fotoğraflar en fazla 10MB olabilir, bu {human_mb(size)})")
+            continue
+
+        upload_stream = file.stream
+        temp_input_path = None
+        temp_output_path = None
+
+        if kind == 'video' and size > VIDEO_MAX_BYTES:
+            if not ffmpeg_available():
+                errors.append(f"{file.filename} (video 50MB sınırını aşıyor, {human_mb(size)})")
+                continue
+
+            tin = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+            temp_input_path = tin.name
+            file.stream.seek(0)
+            tin.write(file.stream.read())
+            tin.close()
+
+            tout = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            temp_output_path = tout.name
+            tout.close()
+
+            ok = compress_video(temp_input_path, temp_output_path, VIDEO_MAX_BYTES - 1024 * 1024)
+            compressed_size = os.path.getsize(temp_output_path) if ok else 0
+
+            if not ok or compressed_size == 0 or compressed_size > VIDEO_MAX_BYTES:
+                for p in (temp_input_path, temp_output_path):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+                errors.append(f"{file.filename} (video sıkıştırma sonrası da 50MB altına inemedi)")
+                continue
+
+            ext = 'mp4'
+            upload_stream = open(temp_output_path, 'rb')
+
         unique_name = f"{uuid.uuid4().hex[:10]}.{ext}"
 
         try:
-            r2_upload(file.stream, trip_id, unique_name, content_type=file.mimetype)
+            r2_upload(upload_stream, trip_id, unique_name, content_type=file.mimetype if upload_stream is file.stream else 'video/mp4')
         except ClientError as e:
             print(f"[R2 UPLOAD HATASI] {file.filename}: {e}")
             errors.append(file.filename)
@@ -853,6 +989,15 @@ def upload_media(trip_id):
             print(f"[BEKLENMEYEN YÜKLEME HATASI] {file.filename}: {e}")
             errors.append(file.filename)
             continue
+        finally:
+            if upload_stream is not file.stream:
+                upload_stream.close()
+            for p in (temp_input_path, temp_output_path):
+                if p:
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
 
         entry = {
             "filename": unique_name,
@@ -1119,16 +1264,63 @@ def feed_upload():
 
     post_id = uuid.uuid4().hex[:12]
     ext = file.filename.rsplit('.', 1)[1].lower()
+    kind = media_type(file.filename)
+    size = file_size(file)
+
+    if kind == 'image' and size > IMAGE_MAX_BYTES:
+        return jsonify({"status": "error", "message": f"Fotoğraflar en fazla 10MB olabilir (bu {human_mb(size)})"}), 400
+
+    upload_stream = file.stream
+    temp_input_path = None
+    temp_output_path = None
+
+    if kind == 'video' and size > VIDEO_MAX_BYTES:
+        if not ffmpeg_available():
+            return jsonify({"status": "error", "message": f"Video 50MB sınırını aşıyor ({human_mb(size)})"}), 400
+
+        tin = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+        temp_input_path = tin.name
+        file.stream.seek(0)
+        tin.write(file.stream.read())
+        tin.close()
+
+        tout = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        temp_output_path = tout.name
+        tout.close()
+
+        ok = compress_video(temp_input_path, temp_output_path, VIDEO_MAX_BYTES - 1024 * 1024)
+        compressed_size = os.path.getsize(temp_output_path) if ok else 0
+
+        if not ok or compressed_size == 0 or compressed_size > VIDEO_MAX_BYTES:
+            for p in (temp_input_path, temp_output_path):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+            return jsonify({"status": "error", "message": "Video sıkıştırma sonrası da 50MB altına inemedi"}), 400
+
+        ext = 'mp4'
+        upload_stream = open(temp_output_path, 'rb')
+
     unique_name = f"{uuid.uuid4().hex[:10]}.{ext}"
 
     try:
-        r2_upload(file.stream, post_id, unique_name, content_type=file.mimetype)
+        r2_upload(upload_stream, post_id, unique_name, content_type=file.mimetype if upload_stream is file.stream else 'video/mp4')
     except ClientError as e:
         print(f"[R2 UPLOAD HATASI] {file.filename}: {e}")
         return jsonify({"status": "error", "message": "Yükleme başarısız oldu"}), 500
     except Exception as e:
         print(f"[BEKLENMEYEN YÜKLEME HATASI] {file.filename}: {e}")
         return jsonify({"status": "error", "message": "Yükleme başarısız oldu"}), 500
+    finally:
+        if upload_stream is not file.stream:
+            upload_stream.close()
+        for p in (temp_input_path, temp_output_path):
+            if p:
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
 
     post = {
         "id": post_id,
@@ -1387,6 +1579,8 @@ def upload_event_image(event_id):
     file = request.files.get('image')
     if not file or not file.filename or not allowed_file(file.filename):
         return jsonify({"status": "error", "message": "Geçerli bir görsel seç"}), 400
+    if file_size(file) > IMAGE_MAX_BYTES:
+        return jsonify({"status": "error", "message": f"Görsel en fazla 10MB olabilir (bu {human_mb(file_size(file))})"}), 400
 
     old_image = event.get('image')
     ext = file.filename.rsplit('.', 1)[1].lower()
