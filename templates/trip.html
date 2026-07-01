@@ -72,12 +72,12 @@
                  onclick="openLightbox({{ loop.index0 }})">
                 <div class="relative aspect-square bg-stone-200 rounded overflow-hidden">
                     {% if item.type == 'video' %}
-                    <video src="/uploads/{{ trip.id }}/{{ item.filename }}" class="w-full h-full object-cover" muted></video>
+                    <video src="/uploads/{{ trip.id }}/{{ item.filename }}" class="w-full h-full object-cover object-top" muted></video>
                     <div class="absolute inset-0 flex items-center justify-center bg-black/20">
                         <i class="fa-solid fa-circle-play text-white text-2xl drop-shadow"></i>
                     </div>
                     {% else %}
-                    <img src="/uploads/{{ trip.id }}/{{ item.filename }}" alt="" class="w-full h-full object-cover">
+                    <img src="/uploads/{{ trip.id }}/{{ item.filename }}" alt="" class="w-full h-full object-cover object-top">
                     {% endif %}
                 </div>
                 <div class="flex items-center justify-between mt-2 px-0.5">
