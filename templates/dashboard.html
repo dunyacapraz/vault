@@ -72,8 +72,13 @@
             <div class="flex gap-3 overflow-x-auto pb-2 stagger">
                 {% for ev in all_events %}
                 <div class="shrink-0 w-64 bg-white border border-[var(--line)] rounded-2xl overflow-hidden relative">
-                    <div class="absolute left-0 top-0 bottom-0 w-1 fab-amber"></div>
-                    <div class="pl-4 pr-4 py-4">
+                    {% if not ev.image %}<div class="absolute left-0 top-0 bottom-0 w-1 fab-amber"></div>{% endif %}
+                    {% if ev.image %}
+                    <div class="h-28 w-full bg-stone-200 overflow-hidden">
+                        <img src="/event-uploads/{{ ev.id }}/{{ ev.image }}" alt="{{ ev.title }}" class="w-full h-full object-cover">
+                    </div>
+                    {% endif %}
+                    <div class="{{ 'pl-4' if not ev.image else 'pl-4' }} pr-4 py-4">
                         <p class="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-400">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</p>
                         <h3 class="font-display font-semibold mt-1 truncate">{{ ev.title }}</h3>
                         {% if ev.location %}<p class="text-stone-500 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
@@ -367,6 +372,15 @@
                 <label class="block text-sm font-semibold text-stone-700 mb-1">Yer <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
                 <input type="text" id="event-location" placeholder="örn. Tekirdağ"
                     class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Görsel <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
+                <label for="event-image" id="event-image-drop" class="flex items-center gap-3 border border-dashed border-stone-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[var(--amber)] transition-colors">
+                    <img id="event-image-preview" class="hidden h-10 w-10 rounded-lg object-cover shrink-0" alt="">
+                    <i id="event-image-icon" class="fa-regular fa-image text-stone-400 text-lg shrink-0"></i>
+                    <span id="event-image-label" class="text-sm text-stone-500 truncate">Bir görsel seç...</span>
+                </label>
+                <input type="file" id="event-image" accept="image/*" class="hidden" onchange="handleEventImageSelected(this.files)">
             </div>
             <button onclick="submitNewEvent()" id="create-event-btn"
                 class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
@@ -673,9 +687,36 @@
     }
 
     // --- Etkinlikler ---
+    let selectedEventImageFile = null;
+
+    function resetEventImageField() {
+        selectedEventImageFile = null;
+        const input = document.getElementById('event-image');
+        if (input) input.value = '';
+        document.getElementById('event-image-preview').classList.add('hidden');
+        document.getElementById('event-image-icon').classList.remove('hidden');
+        document.getElementById('event-image-label').textContent = 'Bir görsel seç...';
+    }
+
+    function handleEventImageSelected(files) {
+        const file = files && files[0];
+        if (!file) return;
+        selectedEventImageFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const preview = document.getElementById('event-image-preview');
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+            document.getElementById('event-image-icon').classList.add('hidden');
+            document.getElementById('event-image-label').textContent = file.name;
+        };
+        reader.readAsDataURL(file);
+    }
+
     function openEventModal() {
         document.getElementById('event-modal').classList.remove('hidden');
         document.getElementById('event-error-msg').classList.add('hidden');
+        resetEventImageField();
         document.getElementById('event-title').focus();
     }
     function closeEventModal() {
@@ -720,6 +761,15 @@
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
+                if (selectedEventImageFile && data.event && data.event.id) {
+                    const formData = new FormData();
+                    formData.append('image', selectedEventImageFile);
+                    try {
+                        await fetch(`/api/events/${data.event.id}/image`, { method: 'POST', body: formData });
+                    } catch (imgErr) {
+                        console.error('event image upload error:', imgErr);
+                    }
+                }
                 queueToast('Etkinlik eklendi', 'success');
                 window.location.reload();
             } else {
