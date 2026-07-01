@@ -233,12 +233,6 @@ def login_required(f):
     return wrapper
 
 
-@app.context_processor
-def inject_nav_user():
-    """Tüm template'lerde (base.html dahil) mevcut kullanıcıyı otomatik erişilebilir yapar."""
-    return {"nav_user": current_user()}
-
-
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -713,14 +707,6 @@ def delete_comment(trip_id, filename, comment_id):
 # ---------------------------------------------------------------------------
 # Yaklaşan Etkinlikler API
 # ---------------------------------------------------------------------------
-@app.route('/api/events/upcoming')
-@login_required
-def api_upcoming_events():
-    """Tarayıcı bildirimleri için: yaklaşan etkinlikleri JSON olarak döner."""
-    events = upcoming_events()
-    return jsonify({"status": "success", "events": events})
-
-
 @app.route('/api/events', methods=['POST'])
 @login_required
 def create_event():
