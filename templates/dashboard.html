@@ -100,21 +100,57 @@
                     <div class="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"><i class="fa-regular fa-images"></i></div>
                     <div class="min-w-0"><p class="font-display font-semibold text-lg leading-none">{{ trips|length }}</p><p class="text-xs text-stone-500 mt-1">Albüm</p></div>
                 </div>
-                <div class="bg-white border border-[var(--line)] rounded-2xl p-4 flex items-center gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-calendar-star"></i></div>
+                <a href="#events" class="bg-white border border-[var(--line)] rounded-2xl p-4 flex items-center gap-3 hover:border-[var(--amber)] transition-colors">
+                    <div class="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 text-white shadow-sm" style="background: linear-gradient(135deg, #f0abfc, #d946ef);"><i class="fa-solid fa-calendar-days"></i></div>
                     <div class="min-w-0"><p class="font-display font-semibold text-lg leading-none">{{ all_events|length }}</p><p class="text-xs text-stone-500 mt-1">Etkinlik</p></div>
-                </div>
+                </a>
                 <div class="bg-white border border-[var(--line)] rounded-2xl p-4 flex items-center gap-3">
                     <div class="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-camera"></i></div>
                     <div class="min-w-0"><p class="font-display font-semibold text-lg leading-none">{{ total_photos.n }}</p><p class="text-xs text-stone-500 mt-1">Fotoğraf</p></div>
                 </div>
-                <div class="bg-white border border-[var(--line)] rounded-2xl p-4 flex items-center gap-3">
+                <button onclick="openMembersModal()" type="button" class="text-left bg-white border border-[var(--line)] rounded-2xl p-4 flex items-center gap-3 hover:border-[var(--amber)] transition-colors">
                     <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-user-group"></i></div>
                     <div class="min-w-0"><p class="font-display font-semibold text-lg leading-none">{{ users|length }}</p><p class="text-xs text-stone-500 mt-1">Üye</p></div>
-                </div>
+                </button>
             </div>
         </div>
         {% endif %}
+
+        <!-- Üyeler Modalı -->
+        <div id="members-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
+            <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-display text-lg font-semibold">Üyeler <span class="text-stone-400 font-normal">({{ users|length }})</span></h3>
+                    <button onclick="closeMembersModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="space-y-1 max-h-80 overflow-y-auto">
+                    {% for uname, u in users.items() %}
+                    <div class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-stone-50">
+                        <div class="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                             style="background-color: {{ u.avatar_color }}">
+                            {{ u.name[0] }}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold truncate flex items-center gap-1.5">
+                                {{ u.name }}
+                                {% if u.is_admin %}<span class="text-[10px] font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Admin</span>{% endif %}
+                            </p>
+                            <p class="text-xs text-stone-500 truncate">@{{ uname }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <script>
+            function openMembersModal() { document.getElementById('members-modal').classList.remove('hidden'); }
+            function closeMembersModal() { document.getElementById('members-modal').classList.add('hidden'); }
+            document.getElementById('members-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'members-modal') closeMembersModal();
+            });
+        </script>
 
         <div id="albums" class="flex flex-wrap items-end justify-between gap-4 mb-8 anim-fade-up scroll-mt-24">
             <div>
