@@ -8,7 +8,10 @@
         <div class="h-9 w-9 fab-amber rounded-xl flex items-center justify-center shadow-sm shrink-0">
             <i class="fa-solid fa-vault text-white text-sm"></i>
         </div>
-        <span class="sidebar-label font-display font-bold text-lg tracking-tight whitespace-nowrap overflow-hidden">Vault</span>
+        <span class="sidebar-label font-display font-bold text-lg tracking-tight whitespace-nowrap overflow-hidden flex-1">Vault</span>
+        <button onclick="closeMobileSidebar()" class="sidebar-mobile-close btn-press h-8 w-8 rounded-lg items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors shrink-0" title="Kapat">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
     </div>
 
     <div class="flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
@@ -101,6 +104,8 @@
     .sidebar-link-active { background-color: var(--amber); color: #fff; opacity: 1; box-shadow: 0 4px 14px -6px rgba(44,92,246,.55); }
     .sidebar-link-active:hover { background-color: var(--amber); }
 
+    .sidebar-mobile-close { display: none; }
+
     /* Daraltılmış (yalnız simge) hâli */
     html.sidebar-collapsed .app-sidebar { width: 76px; }
     html.sidebar-collapsed .sidebar-label { display: none; }
@@ -109,6 +114,7 @@
 
     /* Mobilde: off-canvas */
     @media (max-width: 1023px) {
+        .sidebar-mobile-close { display: flex; }
         .app-sidebar {
             position: fixed; left: 0; top: 0; bottom: 0; width: 260px;
             transform: translateX(-100%); transition: transform .25s ease; z-index: 40;
