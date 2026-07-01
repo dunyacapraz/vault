@@ -84,8 +84,11 @@
                         {% if ev.location %}<p class="text-stone-500 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
                         <div class="flex items-center justify-between mt-3">
                             <span class="font-mono text-xs text-[var(--amber-deep)] font-medium countdown-chip" data-target="{{ ev.date }}T{{ ev.time or '00:00' }}">—</span>
-                            {% if ev.created_by == user.username %}
-                            <button onclick="deleteEvent('{{ ev.id }}')" class="text-stone-300 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
+                            {% if ev.created_by == user.username or user.is_admin %}
+                            <div class="flex items-center gap-2.5">
+                                <button onclick='openEventModal({{ ev|tojson }})' class="text-stone-300 hover:text-[var(--amber-deep)] text-xs"><i class="fa-regular fa-pen-to-square"></i></button>
+                                <button onclick="deleteEvent('{{ ev.id }}')" class="text-stone-300 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
+                            </div>
                             {% endif %}
                         </div>
                     </div>
@@ -344,7 +347,7 @@
 <div id="event-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
     <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
         <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Yeni Etkinlik</h3>
+            <h3 id="event-modal-title" class="font-display text-xl font-semibold">Yeni Etkinlik</h3>
             <button onclick="closeEventModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
                 <i class="fa-solid fa-xmark"></i>
             </button>
@@ -375,11 +378,16 @@
             </div>
             <div>
                 <label class="block text-sm font-semibold text-stone-700 mb-1">Görsel <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
-                <label for="event-image" id="event-image-drop" class="flex items-center gap-3 border border-dashed border-stone-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[var(--amber)] transition-colors">
-                    <img id="event-image-preview" class="hidden h-10 w-10 rounded-lg object-cover shrink-0" alt="">
-                    <i id="event-image-icon" class="fa-regular fa-image text-stone-400 text-lg shrink-0"></i>
-                    <span id="event-image-label" class="text-sm text-stone-500 truncate">Bir görsel seç...</span>
-                </label>
+                <div class="flex items-center gap-2">
+                    <label for="event-image" id="event-image-drop" class="flex-1 flex items-center gap-3 border border-dashed border-stone-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[var(--amber)] transition-colors min-w-0">
+                        <img id="event-image-preview" class="hidden h-10 w-10 rounded-lg object-cover shrink-0" alt="">
+                        <i id="event-image-icon" class="fa-regular fa-image text-stone-400 text-lg shrink-0"></i>
+                        <span id="event-image-label" class="text-sm text-stone-500 truncate">Bir görsel seç...</span>
+                    </label>
+                    <button type="button" id="event-image-remove-btn" onclick="removeEventImage()" class="hidden shrink-0 h-10 w-10 rounded-lg border border-stone-300 text-stone-400 hover:text-red-500 hover:border-red-300 flex items-center justify-center transition-colors" title="Görseli kaldır">
+                        <i class="fa-regular fa-trash-can text-sm"></i>
+                    </button>
+                </div>
                 <input type="file" id="event-image" accept="image/*" class="hidden" onchange="handleEventImageSelected(this.files)">
             </div>
             <button onclick="submitNewEvent()" id="create-event-btn"
@@ -688,20 +696,26 @@
 
     // --- Etkinlikler ---
     let selectedEventImageFile = null;
+    let removeExistingEventImage = false;
+    let editingEventId = null;
+    let editingEventHadImage = false;
 
     function resetEventImageField() {
         selectedEventImageFile = null;
+        removeExistingEventImage = false;
         const input = document.getElementById('event-image');
         if (input) input.value = '';
         document.getElementById('event-image-preview').classList.add('hidden');
         document.getElementById('event-image-icon').classList.remove('hidden');
         document.getElementById('event-image-label').textContent = 'Bir görsel seç...';
+        document.getElementById('event-image-remove-btn').classList.add('hidden');
     }
 
     function handleEventImageSelected(files) {
         const file = files && files[0];
         if (!file) return;
         selectedEventImageFile = file;
+        removeExistingEventImage = false;
         const reader = new FileReader();
         reader.onload = (e) => {
             const preview = document.getElementById('event-image-preview');
@@ -709,14 +723,57 @@
             preview.classList.remove('hidden');
             document.getElementById('event-image-icon').classList.add('hidden');
             document.getElementById('event-image-label').textContent = file.name;
+            document.getElementById('event-image-remove-btn').classList.remove('hidden');
         };
         reader.readAsDataURL(file);
     }
 
-    function openEventModal() {
+    function removeEventImage() {
+        selectedEventImageFile = null;
+        removeExistingEventImage = true;
+        const input = document.getElementById('event-image');
+        if (input) input.value = '';
+        document.getElementById('event-image-preview').classList.add('hidden');
+        document.getElementById('event-image-icon').classList.remove('hidden');
+        document.getElementById('event-image-label').textContent = 'Bir görsel seç...';
+        document.getElementById('event-image-remove-btn').classList.add('hidden');
+    }
+
+    function openEventModal(ev) {
         document.getElementById('event-modal').classList.remove('hidden');
         document.getElementById('event-error-msg').classList.add('hidden');
         resetEventImageField();
+
+        const titleLabel = document.getElementById('event-modal-title');
+        const btnText = document.getElementById('create-event-btn-text');
+
+        if (ev && ev.id) {
+            editingEventId = ev.id;
+            editingEventHadImage = !!ev.image;
+            titleLabel.textContent = 'Etkinliği Düzenle';
+            btnText.textContent = 'Kaydet';
+            document.getElementById('event-title').value = ev.title || '';
+            document.getElementById('event-date').value = ev.date || '';
+            document.getElementById('event-time').value = ev.time || '';
+            document.getElementById('event-location').value = ev.location || '';
+            if (ev.image) {
+                const preview = document.getElementById('event-image-preview');
+                preview.src = `/event-uploads/${ev.id}/${ev.image}`;
+                preview.classList.remove('hidden');
+                document.getElementById('event-image-icon').classList.add('hidden');
+                document.getElementById('event-image-label').textContent = 'Mevcut görsel';
+                document.getElementById('event-image-remove-btn').classList.remove('hidden');
+            }
+        } else {
+            editingEventId = null;
+            editingEventHadImage = false;
+            titleLabel.textContent = 'Yeni Etkinlik';
+            btnText.textContent = 'Etkinliği Ekle';
+            document.getElementById('event-title').value = '';
+            document.getElementById('event-date').value = '';
+            document.getElementById('event-time').value = '';
+            document.getElementById('event-location').value = '';
+        }
         document.getElementById('event-title').focus();
     }
     function closeEventModal() {
@@ -734,6 +791,7 @@
         const errorMsg = document.getElementById('event-error-msg');
         const btn = document.getElementById('create-event-btn');
         const btnText = document.getElementById('create-event-btn-text');
+        const isEditing = !!editingEventId;
 
         errorMsg.classList.add('hidden');
 
@@ -754,37 +812,45 @@
         btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
 
         try {
-            const res = await fetch('/api/events', {
+            const url = isEditing ? `/api/events/${editingEventId}/edit` : '/api/events';
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ title, date, time, location })
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
-                if (selectedEventImageFile && data.event && data.event.id) {
+                const eventId = isEditing ? editingEventId : (data.event && data.event.id);
+                if (selectedEventImageFile && eventId) {
                     const formData = new FormData();
                     formData.append('image', selectedEventImageFile);
                     try {
-                        await fetch(`/api/events/${data.event.id}/image`, { method: 'POST', body: formData });
+                        await fetch(`/api/events/${eventId}/image`, { method: 'POST', body: formData });
                     } catch (imgErr) {
                         console.error('event image upload error:', imgErr);
                     }
+                } else if (isEditing && removeExistingEventImage && editingEventHadImage) {
+                    try {
+                        await fetch(`/api/events/${eventId}/image/delete`, { method: 'POST' });
+                    } catch (imgErr) {
+                        console.error('event image delete error:', imgErr);
+                    }
                 }
-                queueToast('Etkinlik eklendi', 'success');
+                queueToast(isEditing ? 'Etkinlik güncellendi' : 'Etkinlik eklendi', 'success');
                 window.location.reload();
             } else {
                 console.error('submitNewEvent failed:', res.status, data);
                 errorMsg.textContent = data.message || `Bir hata oluştu (${res.status})`;
                 errorMsg.classList.remove('hidden');
                 btn.disabled = false;
-                btnText.textContent = 'Etkinliği Ekle';
+                btnText.textContent = isEditing ? 'Kaydet' : 'Etkinliği Ekle';
             }
         } catch (err) {
             console.error('submitNewEvent network error:', err);
             errorMsg.textContent = 'Bağlantı hatası, tekrar dene.';
             errorMsg.classList.remove('hidden');
             btn.disabled = false;
-            btnText.textContent = 'Etkinliği Ekle';
+            btnText.textContent = isEditing ? 'Kaydet' : 'Etkinliği Ekle';
         }
     }
 
