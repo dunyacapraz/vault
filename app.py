@@ -56,6 +56,7 @@ META_EVENTS_KEY = "_meta/events.json"
 META_USERS_KEY = "_meta/users.json"
 META_PUSH_KEY = "_meta/push_subscriptions.json"
 META_FEED_KEY = "_meta/feed.json"
+META_NOTIF_KEY = "_meta/notifications.json"
 
 # ---------------------------------------------------------------------------
 # Web Push (PWA bildirimleri) yapılandırması — .env dosyasından okunur.
@@ -307,6 +308,49 @@ def send_push_notification(payload, exclude_username=None, only_username=None):
 
     if changed:
         save_push_subscriptions(subs)
+
+
+def load_notifications():
+    return r2_read_json(META_NOTIF_KEY, [])
+
+
+def save_notifications(notifs):
+    r2_write_json(META_NOTIF_KEY, notifs)
+
+
+def record_notification(payload, recipients):
+    """Bildirimi uygulama içi 'Bildirim Geçmişi' listesine kaydeder.
+    Push aboneliği olsun olmasın, hedeflenen tüm kullanıcılar bunu
+    /api/notifications üzerinden görebilir."""
+    if not recipients:
+        return
+    notifs = load_notifications()
+    notifs.append({
+        "id": uuid.uuid4().hex[:12],
+        "title": payload.get("title", ""),
+        "body": payload.get("body", ""),
+        "url": payload.get("url", "/"),
+        "created_at": datetime.utcnow().isoformat(),
+        "recipients": recipients,
+        "read_by": [],
+    })
+    # Geçmişi çok şişirmemek için son 300 bildirimle sınırlı tutuyoruz
+    if len(notifs) > 300:
+        notifs = notifs[-300:]
+    save_notifications(notifs)
+
+
+def notify(payload, exclude_username=None, only_username=None):
+    """Push bildirimi gönderir VE uygulama içi bildirim geçmişine kaydeder.
+    Hedef kullanıcı hesabı olduğu sürece (push izni verilmemiş olsa bile)
+    bildirim geçmişte görünür."""
+    if only_username:
+        recipients = [] if only_username == exclude_username else [only_username]
+    else:
+        recipients = [u for u in load_users().keys() if u != exclude_username]
+
+    record_notification(payload, recipients)
+    send_push_notification(payload, exclude_username=exclude_username, only_username=only_username)
 
 
 def load_events():
@@ -655,7 +699,7 @@ def create_trip():
     save_trips(trips)
 
     try:
-        send_push_notification(
+        notify(
             {"title": "🗂️ Yeni albüm oluşturuldu", "body": f"{user['name']} \"{title}\" adında yeni bir albüm oluşturdu", "url": f"/trip/{trip_id}", "tag": f"trip-new-{trip_id}"},
             exclude_username=user['username'],
         )
@@ -773,7 +817,7 @@ def upload_media(trip_id):
         count = len(saved)
         body = f"{user['name']} \"{trip['title']}\" albümüne {count} yeni anı ekledi" if count > 1 \
             else f"{user['name']} \"{trip['title']}\" albümüne yeni bir anı ekledi"
-        send_push_notification(
+        notify(
             {"title": "📸 Yeni anı eklendi", "body": body, "url": f"/trip/{trip_id}", "tag": f"trip-{trip_id}"},
             exclude_username=user['username'],
         )
@@ -812,7 +856,7 @@ def edit_media(trip_id, filename):
 
     if entry.get('uploaded_by') and entry['uploaded_by'] != user['username']:
         try:
-            send_push_notification(
+            notify(
                 {"title": "✏️ Anı düzenlendi", "body": f"{user['name']} eklediğin bir anıyı düzenledi", "url": f"/trip/{trip_id}", "tag": f"edit-{trip_id}-{filename}"},
                 exclude_username=user['username'],
                 only_username=entry.get('uploaded_by'),
@@ -849,7 +893,7 @@ def delete_media(trip_id, filename):
     r2_delete(trip_id, filename)
 
     try:
-        send_push_notification(
+        notify(
             {"title": "🗑️ Bir anı silindi", "body": f"{user['name']} \"{trip['title']}\" albümünden bir anı sildi", "url": f"/trip/{trip_id}", "tag": f"delete-{trip_id}-{filename}"},
             exclude_username=user['username'],
         )
@@ -912,7 +956,7 @@ def toggle_like(trip_id, filename):
 
     if liked:
         try:
-            send_push_notification(
+            notify(
                 {"title": "❤️ Yeni beğeni", "body": f"{user['name']} bir anını beğendi", "url": f"/trip/{trip_id}", "tag": f"like-{trip_id}-{filename}"},
                 exclude_username=user['username'],
                 only_username=entry.get('uploaded_by'),
@@ -955,7 +999,7 @@ def add_comment(trip_id, filename):
 
     try:
         preview = text if len(text) <= 80 else text[:77] + '...'
-        send_push_notification(
+        notify(
             {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": f"/trip/{trip_id}", "tag": f"comment-{trip_id}-{filename}"},
             exclude_username=user['username'],
             only_username=entry.get('uploaded_by'),
@@ -1039,7 +1083,7 @@ def feed_upload():
 
     try:
         body = f"{user['name']} bir şey paylaştı" + (f": \"{caption}\"" if caption else "")
-        send_push_notification(
+        notify(
             {"title": "✨ Yeni paylaşım", "body": body, "url": "/feed", "tag": f"feed-{post_id}"},
             exclude_username=user['username'],
         )
@@ -1070,7 +1114,7 @@ def feed_toggle_like(post_id):
 
     if liked and post.get('posted_by'):
         try:
-            send_push_notification(
+            notify(
                 {"title": "❤️ Yeni beğeni", "body": f"{user['name']} paylaşımını beğendi", "url": "/feed", "tag": f"feed-like-{post_id}"},
                 exclude_username=user['username'],
                 only_username=post.get('posted_by'),
@@ -1130,7 +1174,7 @@ def feed_add_comment(post_id):
     if post.get('posted_by') and post['posted_by'] != user['username']:
         try:
             preview = text if len(text) <= 80 else text[:77] + '...'
-            send_push_notification(
+            notify(
                 {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": "/feed", "tag": f"feed-comment-{post_id}"},
                 exclude_username=user['username'],
                 only_username=post.get('posted_by'),
@@ -1197,7 +1241,7 @@ def create_event():
     save_events(events)
 
     try:
-        send_push_notification(
+        notify(
             {"title": "📅 Yeni etkinlik eklendi", "body": f"{user['name']} \"{title}\" etkinliğini ekledi ({date})", "url": "/", "tag": f"event-new-{event['id']}"},
             exclude_username=user['username'],
         )
@@ -1266,6 +1310,59 @@ def push_unsubscribe():
         subs[user['username']] = new_subs
         save_push_subscriptions(subs)
 
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Bildirim Geçmişi — uygulama içi bildirim listesi (push izni olmasa bile
+# kullanıcı geçmiş bildirimleri buradan görebilir)
+# ---------------------------------------------------------------------------
+@app.route('/api/notifications')
+@login_required
+def get_notifications():
+    user = current_user()
+    notifs = load_notifications()
+    mine = [n for n in notifs if user['username'] in n.get('recipients', [])]
+    mine.sort(key=lambda n: n.get('created_at', ''), reverse=True)
+    mine = mine[:100]
+    result = [{
+        "id": n['id'],
+        "title": n['title'],
+        "body": n['body'],
+        "url": n.get('url', '/'),
+        "created_at": n['created_at'],
+        "read": user['username'] in n.get('read_by', []),
+    } for n in mine]
+    unread_count = sum(1 for n in result if not n['read'])
+    return jsonify({"status": "success", "notifications": result, "unread_count": unread_count})
+
+
+@app.route('/api/notifications/<notif_id>/read', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    user = current_user()
+    notifs = load_notifications()
+    notif = next((n for n in notifs if n['id'] == notif_id), None)
+    if not notif:
+        return jsonify({"status": "error", "message": "Bildirim bulunamadı"}), 404
+    if user['username'] not in notif.setdefault('read_by', []):
+        notif['read_by'].append(user['username'])
+        save_notifications(notifs)
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/notifications/read-all', methods=['POST'])
+@login_required
+def mark_all_notifications_read():
+    user = current_user()
+    notifs = load_notifications()
+    changed = False
+    for n in notifs:
+        if user['username'] in n.get('recipients', []) and user['username'] not in n.setdefault('read_by', []):
+            n['read_by'].append(user['username'])
+            changed = True
+    if changed:
+        save_notifications(notifs)
     return jsonify({"status": "success"})
 
 
