@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import boto3
@@ -26,6 +26,19 @@ load_dotenv()  # .env dosyasındaki değişkenleri oku
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'vault_secure_key_2026_change_me')
+
+# Oturum çerezini kalıcı yapıyoruz — aksi halde iOS'ta PWA kapatılıp
+# yeniden açıldığında (uygulama arka planda sonlandırılınca) "session cookie"
+# silinir ve kullanıcı sürekli çıkış yapmış gibi görünür.
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=90)
+app.config['SESSION_COOKIE_SECURE'] = True      # HTTPS üzerinden gönderilsin
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 
 @app.after_request
