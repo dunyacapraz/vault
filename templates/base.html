@@ -1,503 +1,409 @@
-{% extends "base.html" %}
-{% block title %}Vault | Albümler{% endblock %}
-{% block content %}
-<div class="min-h-screen">
-    <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-20 px-5 sm:px-8 py-5 border-b border-[var(--line)] flex justify-between items-center anim-fade">
-        <div class="flex items-center gap-3">
-            <div class="h-10 w-10 fab-amber rounded-xl flex items-center justify-center shadow-md">
-                <i class="fa-solid fa-vault text-white"></i>
-            </div>
-            <div>
-                <span class="font-display font-semibold text-xl tracking-tight block leading-none">Vault</span>
-                <span class="text-xs text-stone-500">Ortak anı arşivi</span>
-            </div>
-        </div>
-        <div class="flex items-center gap-3">
-            <div class="hidden sm:flex items-center gap-2 text-sm text-stone-600">
-                <div class="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                     style="background-color: {{ user.avatar_color }}">
-                    {{ user.name[0] }}
-                </div>
-                <span class="font-medium">{{ user.name }}</span>
-            </div>
-            {% if user.is_admin %}
-            <a href="/admin" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Admin Paneli">
-                <i class="fa-solid fa-user-shield"></i>
-            </a>
-            {% endif %}
-            <a href="/feed" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Keşfet">
-                <i class="fa-solid fa-compass"></i>
-            </a>
-            <button id="push-toggle-btn" onclick="openNotificationModal()" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Bildirim Ayarları">
-                <i id="push-toggle-icon" class="fa-regular fa-bell"></i>
-            </button>
-            <a href="/account" class="btn-press text-stone-500 hover:text-stone-800 hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Hesap Ayarları">
-                <i class="fa-solid fa-gear"></i>
-            </a>
-            <button onclick="logout()" class="btn-press text-stone-500 hover:text-red-600 hover:bg-red-50 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Çıkış Yap">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i>
-            </button>
-        </div>
-    </header>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Vault | Ortak Anılar{% endblock %}</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2c5cf6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Vault">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="icon" href="/static/icons/icon-192.png">
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('vault-theme');
+                if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #131316;
+            --paper: #eeeeec;
+            --amber: #2c5cf6;
+            --amber-deep: #1d3fc4;
+            --moss: #1f8a5f;
+            --line: #dcdcda;
+            --surface: #ffffff;
+        }
+        html.dark {
+            --ink: #f1f1f0;
+            --paper: #131316;
+            --amber: #5b82ff;
+            --amber-deep: #7c9bff;
+            --moss: #34b87a;
+            --line: #2c2c30;
+            --surface: #1c1c20;
+        }
+        html { overscroll-behavior-y: contain; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--paper); color: var(--ink); transition: background-color .2s ease, color .2s ease; overscroll-behavior-y: contain; }
+        .font-display { font-family: 'Inter', sans-serif; letter-spacing: -0.03em; font-weight: 700; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.01em; }
 
-    <main class="px-5 sm:px-8 py-8 max-w-6xl mx-auto">
-        {% if all_events %}
-        <div class="anim-fade-up mb-9">
-            <div class="flex items-center justify-between mb-3">
-                <h2 class="font-display text-xl font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-star text-[var(--amber)]"></i> Yaklaşan Etkinlikler
-                </h2>
-                <button onclick="openEventModal()" class="btn-press text-sm text-[var(--amber-deep)] hover:bg-stone-100 px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5">
-                    <i class="fa-solid fa-plus"></i> Etkinlik Ekle
-                </button>
-            </div>
-            <div class="flex gap-3 overflow-x-auto pb-2 stagger">
-                {% for ev in all_events %}
-                <div class="shrink-0 w-64 bg-white border border-[var(--line)] rounded-2xl overflow-hidden relative">
-                    <div class="absolute left-0 top-0 bottom-0 w-1 fab-amber"></div>
-                    <div class="pl-4 pr-4 py-4">
-                        <p class="font-mono text-[10px] uppercase tracking-[0.15em] text-stone-400">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</p>
-                        <h3 class="font-display font-semibold mt-1 truncate">{{ ev.title }}</h3>
-                        {% if ev.location %}<p class="text-stone-500 text-xs mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i>{{ ev.location }}</p>{% endif %}
-                        <div class="flex items-center justify-between mt-3">
-                            <span class="font-mono text-xs text-[var(--amber-deep)] font-medium countdown-chip" data-target="{{ ev.date }}T{{ ev.time or '00:00' }}">—</span>
-                            {% if ev.created_by == user.username %}
-                            <button onclick="deleteEvent('{{ ev.id }}')" class="text-stone-300 hover:text-red-500 text-xs"><i class="fa-regular fa-trash-can"></i></button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="flex flex-wrap items-end justify-between gap-4 mb-8 anim-fade-up">
-            <div>
-                <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Tatiller &amp; Anılar</h1>
-                <p class="text-stone-500 mt-1 text-sm">{{ trips|length }} albüm · {{ users|length }} üye</p>
-            </div>
-            <div class="flex gap-2">
-                {% if not all_events %}
-                <button onclick="openEventModal()" class="btn-press bg-white border border-stone-300 text-stone-700 px-5 py-3 rounded-xl font-medium shadow-sm hover:bg-stone-50 transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-star"></i> Etkinlik Ekle
-                </button>
-                {% endif %}
-                <button onclick="openCreateModal()" class="btn-press fab-amber text-white px-5 py-3 rounded-xl font-medium shadow-md hover:brightness-105 transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-plus"></i> Yeni Tatil Ekle
-                </button>
-            </div>
-        </div>
-
-        {% if not trips %}
-        <div class="anim-fade-up text-center py-24 border-2 border-dashed border-stone-300 rounded-3xl bg-white/60">
-            <i class="fa-solid fa-suitcase-rolling text-stone-300 text-5xl mb-4"></i>
-            <p class="text-stone-500 font-medium">Henüz hiç albüm yok.</p>
-            <p class="text-stone-400 text-sm mt-1">İlk tatili sen ekle, anılar buradan başlasın.</p>
-            <button onclick="openCreateModal()" class="btn-press mt-5 fab-amber text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:brightness-105 transition-all">
-                Albüm Oluştur
-            </button>
-        </div>
-        {% else %}
-        <div class="stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% for trip in trips %}
-            <a href="/trip/{{ trip.id }}" class="trip-card block bg-white rounded-2xl overflow-hidden shadow-sm border border-[var(--line)] group">
-                <div class="relative aspect-[4/3] bg-stone-200 overflow-hidden">
-                    {% if trip.cover %}
-                    <img src="/uploads/{{ trip.id }}/{{ trip.cover }}" alt="{{ trip.title }}"
-                         class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    {% else %}
-                    <div class="w-full h-full flex items-center justify-center text-stone-400">
-                        <i class="fa-regular fa-images text-4xl"></i>
-                    </div>
-                    {% endif %}
-                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                        <span class="text-white/90 text-xs font-medium flex items-center gap-1.5">
-                            <i class="fa-regular fa-image"></i> {{ trip.media|length }} anı
-                        </span>
-                    </div>
-                </div>
-                <div class="p-4">
-                    <h3 class="font-display font-semibold text-lg leading-tight truncate">{{ trip.title }}</h3>
-                    <div class="flex items-center justify-between mt-2">
-                        <span class="text-xs text-stone-500">
-                            {% if trip.date %}<i class="fa-regular fa-calendar mr-1"></i>{{ trip.date }}{% else %}&nbsp;{% endif %}
-                        </span>
-                        <div class="h-6 w-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
-                             style="background-color: {{ users.get(trip.created_by, {}).get('avatar_color', '#999') }}"
-                             title="{{ users.get(trip.created_by, {}).get('name', trip.created_by) }} oluşturdu">
-                            {{ users.get(trip.created_by, {}).get('name', trip.created_by)[0] }}
-                        </div>
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </main>
-</div>
-
-<!-- Yeni Tatil Modalı -->
-<div id="create-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Yeni Tatil / Anı Albümü</h3>
-            <button onclick="closeCreateModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
-                <input type="text" id="trip-title" placeholder="örn. Tekirdağ Tatili"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Tarih</label>
-                <input type="date" id="trip-date"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Açıklama <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
-                <textarea id="trip-description" rows="2" placeholder="Bu tatille ilgili kısa bir not..."
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none resize-none"></textarea>
-            </div>
-            <button onclick="createTrip()" id="create-trip-btn"
-                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
-                <span id="create-trip-btn-text">Albümü Oluştur</span>
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Yeni Etkinlik Modalı -->
-<div id="notif-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-sm p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Bildirim Ayarları</h3>
-            <button onclick="closeNotificationModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="space-y-5">
-            <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
-                        <i id="notif-modal-icon" class="fa-regular fa-bell text-stone-500"></i>
-                    </div>
-                    <div>
-                        <p class="font-semibold text-sm leading-tight">Bildirimler</p>
-                        <p id="notif-modal-status" class="text-xs text-stone-500 mt-0.5">Kontrol ediliyor...</p>
-                    </div>
-                </div>
-                <button id="notif-toggle-switch" onclick="handleNotifSwitchClick()"
-                        class="btn-press relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 bg-stone-300"
-                        role="switch" aria-checked="false">
-                    <span id="notif-toggle-knob" class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform translate-x-1"></span>
-                </button>
-            </div>
-            <p class="text-xs text-stone-400 leading-relaxed">
-                Açık olduğunda yeni anılar, albümler, etkinlikler, yorumlar ve beğeniler için bu cihaza bildirim gönderilir.
-            </p>
-            <div id="notif-modal-denied-hint" class="hidden bg-amber-50 text-amber-800 p-3 rounded-lg text-xs border border-amber-200">
-                Bildirimlere izin verilmemiş görünüyor. iPhone'da Ayarlar &gt; Bildirimler &gt; Vault yolundan elle açman gerekiyor.
-            </div>
-        </div>
-    </div>
-</div>
-
-<div id="event-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Yeni Etkinlik</h3>
-            <button onclick="closeEventModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
-        <div class="space-y-4">
-            <div id="event-error-msg" class="hidden bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200 text-center"></div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
-                <input type="text" id="event-title" placeholder="örn. Tekirdağ Buluşması"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-sm font-semibold text-stone-700 mb-1">Tarih</label>
-                    <input type="date" id="event-date"
-                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold text-stone-700 mb-1">Saat <span class="text-stone-400 font-normal">(ops.)</span></label>
-                    <input type="time" id="event-time"
-                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-semibold text-stone-700 mb-1">Yer <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
-                <input type="text" id="event-location" placeholder="örn. Tekirdağ"
-                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
-            </div>
-            <button onclick="submitNewEvent()" id="create-event-btn"
-                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
-                <span id="create-event-btn-text">Etkinliği Ekle</span>
-            </button>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    function openCreateModal() {
-        document.getElementById('create-modal').classList.remove('hidden');
-        document.getElementById('trip-title').focus();
-    }
-    function closeCreateModal() {
-        document.getElementById('create-modal').classList.add('hidden');
-    }
-    document.getElementById('create-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'create-modal') closeCreateModal();
-    });
-
-    async function createTrip() {
-        const title = document.getElementById('trip-title').value.trim();
-        const date = document.getElementById('trip-date').value;
-        const description = document.getElementById('trip-description').value.trim();
-        const btn = document.getElementById('create-trip-btn');
-        const btnText = document.getElementById('create-trip-btn-text');
-
-        if (!title) {
-            showToast('Başlık gerekli', 'error');
-            return;
+        /* Karanlık mod: ortak Tailwind yardımcı sınıflarını ezerek tüm sayfalara uygula */
+        html.dark .bg-white,
+        html.dark .bg-white\/90,
+        html.dark .bg-white\/95,
+        html.dark .bg-white\/60,
+        html.dark .bg-white\/40 { background-color: var(--surface) !important; }
+        html.dark .bg-stone-50,
+        html.dark .bg-stone-100,
+        html.dark .bg-stone-200 { background-color: #232328 !important; }
+        html.dark .border-stone-200,
+        html.dark .border-stone-300 { border-color: var(--line) !important; }
+        html.dark .text-stone-300 { color: #6f6f76 !important; }
+        html.dark .text-stone-400 { color: #87878e !important; }
+        html.dark .text-stone-500 { color: #9c9ca3 !important; }
+        html.dark .text-stone-600 { color: #b4b4ba !important; }
+        html.dark .text-stone-700 { color: #d6d6da !important; }
+        html.dark .text-stone-800 { color: #ececee !important; }
+        html.dark .bg-\[var\(--ink\)\] { background-color: #1c1c20 !important; }
+        html.dark input,
+        html.dark textarea { background-color: var(--surface); color: var(--ink); }
+        html.dark ::placeholder { color: #6f6f76; }
+        html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow-xl {
+            box-shadow: 0 8px 20px -10px rgba(0,0,0,.5) !important;
         }
 
-        btn.disabled = true;
-        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: #d4d4d3; border-radius: 999px; }
+        ::-webkit-scrollbar-track { background: transparent; }
 
-        try {
-            const res = await fetch('/api/trips', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, date, description })
+        .theme-toggle {
+            position: fixed; bottom: 18px; right: 18px; z-index: 90;
+            height: 42px; width: 42px; border-radius: 999px;
+            background: var(--surface); border: 1px solid var(--line);
+            box-shadow: 0 6px 16px -8px rgba(0,0,0,.25);
+            display: flex; align-items: center; justify-content: center;
+            color: var(--ink); cursor: pointer; transition: transform .15s ease, background-color .2s ease;
+        }
+        .theme-toggle:active { transform: scale(.94); }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(.97); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(16px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pinDrop {
+            0% { opacity: 0; transform: translateY(-6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .anim-fade-up { animation: fadeInUp .4s cubic-bezier(.22,.61,.36,1) both; }
+        .anim-fade { animation: fadeIn .3s ease both; }
+        .anim-scale { animation: scaleIn .2s cubic-bezier(.22,.61,.36,1) both; }
+        .anim-slide { animation: slideInRight .3s cubic-bezier(.22,.61,.36,1) both; }
+        .anim-pin { animation: pinDrop .35s cubic-bezier(.22,.61,.36,1) both; }
+
+        .stagger > * { opacity: 0; animation: fadeInUp .4s cubic-bezier(.22,.61,.36,1) both; }
+        .stagger > *:nth-child(1) { animation-delay: .02s; }
+        .stagger > *:nth-child(2) { animation-delay: .05s; }
+        .stagger > *:nth-child(3) { animation-delay: .08s; }
+        .stagger > *:nth-child(4) { animation-delay: .11s; }
+        .stagger > *:nth-child(5) { animation-delay: .14s; }
+        .stagger > *:nth-child(6) { animation-delay: .17s; }
+        .stagger > *:nth-child(7) { animation-delay: .20s; }
+        .stagger > *:nth-child(8) { animation-delay: .23s; }
+        .stagger > *:nth-child(n+9) { animation-delay: .26s; }
+
+        .polaroid {
+            transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+        }
+        .polaroid:hover {
+            transform: translateY(-3px);
+            border-color: #d4d4d3;
+            box-shadow: 0 8px 20px -10px rgba(19, 19, 22, .18);
+            z-index: 10;
+        }
+
+        .trip-card { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+        .trip-card:hover { transform: translateY(-3px); border-color: #d4d4d3; box-shadow: 0 12px 24px -14px rgba(19,19,22,.2); }
+
+        .btn-press { transition: transform .1s ease, box-shadow .2s ease, background-color .2s ease; }
+        .btn-press:active { transform: scale(.97); }
+
+        .skeleton {
+            background: linear-gradient(100deg, #ece9e3 30%, #f6f5f2 50%, #ece9e3 70%);
+            background-size: 800px 100%;
+            animation: shimmer 1.4s infinite linear;
+        }
+
+        .spinner {
+            width: 18px; height: 18px;
+            border: 2px solid rgba(255,255,255,.4);
+            border-top-color: #fff;
+            border-radius: 999px;
+            animation: spin .7s linear infinite;
+        }
+
+        .dropzone-active {
+            border-color: var(--amber) !important;
+            background-color: #eef2ff !important;
+        }
+
+        .fab-amber {
+            background: var(--amber);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: .001ms !important;
+            }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="antialiased min-h-screen">
+    <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Görünümü değiştir">
+        <i id="theme-toggle-icon" class="fa-solid fa-moon text-sm"></i>
+    </button>
+
+    {% block content %}{% endblock %}
+
+    <!-- Pull-to-refresh göstergesi (standalone PWA'da native pull-to-refresh yok) -->
+    <div id="ptr-indicator" style="position:fixed; top:0; left:0; right:0; display:flex; justify-content:center; align-items:flex-end; height:0; overflow:hidden; z-index:200; transition:height .15s ease; pointer-events:none;">
+        <div style="padding:10px 0;">
+            <i id="ptr-icon" class="fa-solid fa-arrow-down" style="color:var(--amber-deep); font-size:18px; transition:transform .15s ease;"></i>
+        </div>
+    </div>
+
+    <!-- Toast bildirim alanı -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[100] flex flex-col gap-2 items-end"></div>
+
+    <script>
+        function setThemeIcon() {
+            const icon = document.getElementById('theme-toggle-icon');
+            const isDark = document.documentElement.classList.contains('dark');
+            icon.className = isDark ? 'fa-solid fa-sun text-sm' : 'fa-solid fa-moon text-sm';
+        }
+        function toggleTheme() {
+            const html = document.documentElement;
+            html.classList.toggle('dark');
+            try { localStorage.setItem('vault-theme', html.classList.contains('dark') ? 'dark' : 'light'); } catch (e) {}
+            setThemeIcon();
+        }
+        setThemeIcon();
+
+        // --- Pull-to-refresh (standalone PWA'da native destek yok, elle uyguluyoruz) ---
+        (function () {
+            const indicator = document.getElementById('ptr-indicator');
+            const icon = document.getElementById('ptr-icon');
+            const THRESHOLD = 70;
+            let startY = 0;
+            let pulling = false;
+            let armed = false; // touchstart en üstte mi başladı
+            let refreshing = false;
+
+            function scrollPos() {
+                return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            }
+
+            document.addEventListener('touchstart', (e) => {
+                if (refreshing) { armed = false; return; }
+                if (scrollPos() <= 0 && e.touches.length === 1) {
+                    startY = e.touches[0].clientY;
+                    armed = true;
+                    pulling = false;
+                } else {
+                    armed = false;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!armed || refreshing) return;
+                const diff = e.touches[0].clientY - startY;
+                // Sayfa hâlâ en üstteyken aşağı çekiliyorsa: native bounce'ı iptal et, kendi göstergemizi çiz
+                if (diff > 0 && scrollPos() <= 0) {
+                    pulling = true;
+                    e.preventDefault();
+                    const height = Math.min(diff * 0.5, 90);
+                    indicator.style.height = height + 'px';
+                    icon.style.transform = height >= THRESHOLD ? 'rotate(180deg)' : 'rotate(0deg)';
+                } else if (diff <= 0) {
+                    // Kullanıcı geri yukarı kaydırdı, iptal
+                    pulling = false;
+                    indicator.style.height = '0px';
+                }
+            }, { passive: false });
+
+            document.addEventListener('touchend', () => {
+                armed = false;
+                if (!pulling || refreshing) { pulling = false; return; }
+                pulling = false;
+                const currentHeight = parseFloat(indicator.style.height) || 0;
+                if (currentHeight >= THRESHOLD) {
+                    refreshing = true;
+                    indicator.style.height = '50px';
+                    icon.className = 'fa-solid fa-spinner fa-spin';
+                    icon.style.transform = 'none';
+                    window.location.reload();
+                } else {
+                    indicator.style.height = '0px';
+                }
             });
-            const data = await res.json();
-            if (res.ok) {
-                window.location.href = '/trip/' + data.trip.id;
-            } else {
-                showToast(data.message || 'Bir hata oluştu', 'error');
-                btn.disabled = false;
-                btnText.textContent = 'Albümü Oluştur';
-            }
-        } catch (err) {
-            showToast('Bağlantı hatası', 'error');
-            btn.disabled = false;
-            btnText.textContent = 'Albümü Oluştur';
-        }
-    }
 
-    // --- Bildirimler ---
-    async function refreshPushToggleIcon() {
-        const subscribed = await isPushSubscribed();
-        const icon = document.getElementById('push-toggle-icon');
-        const btn = document.getElementById('push-toggle-btn');
-        if (subscribed) {
-            icon.className = 'fa-solid fa-bell text-[var(--amber-deep)]';
-            btn.title = 'Bildirimler açık';
-        } else {
-            icon.className = 'fa-regular fa-bell';
-            btn.title = 'Bildirim Ayarları';
-        }
-        return subscribed;
-    }
-
-    async function refreshNotifModal() {
-        const switchBtn = document.getElementById('notif-toggle-switch');
-        const knob = document.getElementById('notif-toggle-knob');
-        const statusText = document.getElementById('notif-modal-status');
-        const modalIcon = document.getElementById('notif-modal-icon');
-        const deniedHint = document.getElementById('notif-modal-denied-hint');
-
-        if (!pushSupported()) {
-            statusText.textContent = 'Bu tarayıcı desteklemiyor';
-            deniedHint.classList.remove('hidden');
-            deniedHint.textContent = 'Bu tarayıcı bildirimleri desteklemiyor. iPhone\'da önce Vault\'u ana ekrana eklemen gerekiyor.';
-            switchBtn.classList.add('opacity-40', 'cursor-not-allowed');
-            return;
-        }
-
-        if (Notification.permission === 'denied') {
-            statusText.textContent = 'İzin verilmemiş';
-            switchBtn.classList.remove('bg-[var(--amber-deep)]');
-            switchBtn.classList.add('bg-stone-300');
-            knob.classList.remove('translate-x-6');
-            knob.classList.add('translate-x-1');
-            switchBtn.setAttribute('aria-checked', 'false');
-            modalIcon.className = 'fa-regular fa-bell-slash text-stone-500';
-            deniedHint.classList.remove('hidden');
-            return;
-        }
-        deniedHint.classList.add('hidden');
-
-        const subscribed = await isPushSubscribed();
-        if (subscribed) {
-            statusText.textContent = 'Açık';
-            switchBtn.classList.remove('bg-stone-300');
-            switchBtn.classList.add('bg-[var(--amber-deep)]');
-            knob.classList.remove('translate-x-1');
-            knob.classList.add('translate-x-6');
-            switchBtn.setAttribute('aria-checked', 'true');
-            modalIcon.className = 'fa-solid fa-bell text-[var(--amber-deep)]';
-        } else {
-            statusText.textContent = 'Kapalı';
-            switchBtn.classList.remove('bg-[var(--amber-deep)]');
-            switchBtn.classList.add('bg-stone-300');
-            knob.classList.remove('translate-x-6');
-            knob.classList.add('translate-x-1');
-            switchBtn.setAttribute('aria-checked', 'false');
-            modalIcon.className = 'fa-regular fa-bell text-stone-500';
-        }
-    }
-
-    async function handleNotifSwitchClick() {
-        if (!pushSupported() || Notification.permission === 'denied') return;
-        const switchBtn = document.getElementById('notif-toggle-switch');
-        switchBtn.classList.add('opacity-60');
-        const currentlySubscribed = await isPushSubscribed();
-        if (currentlySubscribed) {
-            await disablePushNotifications();
-        } else {
-            await enablePushNotifications();
-        }
-        switchBtn.classList.remove('opacity-60');
-        await refreshNotifModal();
-        await refreshPushToggleIcon();
-    }
-
-    function openNotificationModal() {
-        document.getElementById('notif-modal').classList.remove('hidden');
-        refreshNotifModal();
-    }
-    function closeNotificationModal() {
-        document.getElementById('notif-modal').classList.add('hidden');
-    }
-    document.getElementById('notif-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'notif-modal') closeNotificationModal();
-    });
-
-    refreshPushToggleIcon();
-
-    async function logout() {
-        try {
-            const response = await fetch('/logout', { method: 'POST' });
-            if (response.ok) window.location.reload();
-        } catch (err) {
-            showToast('Çıkış yapılamadı', 'error');
-        }
-    }
-
-    // --- Etkinlikler ---
-    function openEventModal() {
-        document.getElementById('event-modal').classList.remove('hidden');
-        document.getElementById('event-error-msg').classList.add('hidden');
-        document.getElementById('event-title').focus();
-    }
-    function closeEventModal() {
-        document.getElementById('event-modal').classList.add('hidden');
-    }
-    document.getElementById('event-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'event-modal') closeEventModal();
-    });
-
-    async function submitNewEvent() {
-        const titleEl = document.getElementById('event-title');
-        const dateEl = document.getElementById('event-date');
-        const timeEl = document.getElementById('event-time');
-        const locationEl = document.getElementById('event-location');
-        const errorMsg = document.getElementById('event-error-msg');
-        const btn = document.getElementById('create-event-btn');
-        const btnText = document.getElementById('create-event-btn-text');
-
-        errorMsg.classList.add('hidden');
-
-        const title = (titleEl.value || '').trim();
-        const date = (dateEl.value || '').trim();
-        const time = (timeEl.value || '').trim();
-        const location = (locationEl.value || '').trim();
-
-        if (!title || !date) {
-            errorMsg.textContent = !date
-                ? 'Tarih alanı boş görünüyor. Takvim simgesine tıklayıp tarihi seçmeyi dene.'
-                : 'Başlık gerekli.';
-            errorMsg.classList.remove('hidden');
-            return;
-        }
-
-        btn.disabled = true;
-        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
-
-        try {
-            const res = await fetch('/api/events', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, date, time, location })
+            document.addEventListener('touchcancel', () => {
+                armed = false;
+                pulling = false;
+                if (!refreshing) indicator.style.height = '0px';
             });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-                queueToast('Etkinlik eklendi', 'success');
-                window.location.reload();
-            } else {
-                console.error('submitNewEvent failed:', res.status, data);
-                errorMsg.textContent = data.message || `Bir hata oluştu (${res.status})`;
-                errorMsg.classList.remove('hidden');
-                btn.disabled = false;
-                btnText.textContent = 'Etkinliği Ekle';
+        })();
+        document.addEventListener('DOMContentLoaded', () => {
+            const pending = sessionStorage.getItem('pending_toast');
+            if (pending) {
+                sessionStorage.removeItem('pending_toast');
+                try {
+                    const { message, type } = JSON.parse(pending);
+                    showToast(message, type);
+                } catch (e) {}
             }
-        } catch (err) {
-            console.error('submitNewEvent network error:', err);
-            errorMsg.textContent = 'Bağlantı hatası, tekrar dene.';
-            errorMsg.classList.remove('hidden');
-            btn.disabled = false;
-            btnText.textContent = 'Etkinliği Ekle';
-        }
-    }
-
-    async function deleteEvent(eventId) {
-        if (!confirm('Bu etkinliği silmek istediğine emin misin?')) return;
-        try {
-            const res = await fetch(`/api/events/${eventId}/delete`, { method: 'POST' });
-            const data = await res.json();
-            if (res.ok) {
-                queueToast('Etkinlik silindi', 'success');
-                window.location.reload();
-            } else {
-                showToast(data.message || 'Silinemedi', 'error');
-            }
-        } catch (err) {
-            showToast('Bağlantı hatası', 'error');
-        }
-    }
-
-    // Etkinlik kartlarındaki kısa geri sayım metni
-    function formatChip(diff) {
-        if (diff <= 0) return 'Başladı';
-        const days = Math.floor(diff / 86400000);
-        const hours = Math.floor((diff % 86400000) / 3600000);
-        if (days > 0) return `${days} gün ${hours} saat kaldı`;
-        const mins = Math.floor((diff % 3600000) / 60000);
-        if (hours > 0) return `${hours} saat ${mins} dk kaldı`;
-        const secs = Math.floor((diff % 60000) / 1000);
-        return `${mins} dk ${secs} sn kaldı`;
-    }
-    function tickChips() {
-        document.querySelectorAll('.countdown-chip').forEach(chip => {
-            const target = new Date(chip.dataset.target);
-            chip.textContent = formatChip(target - new Date());
         });
-    }
-    if (document.querySelector('.countdown-chip')) {
-        tickChips();
-        setInterval(tickChips, 1000);
-    }
-</script>
-{% endblock %}
+        function queueToast(message, type = 'success') {
+            sessionStorage.setItem('pending_toast', JSON.stringify({ message, type }));
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const palette = {
+                success: { bg: 'bg-[var(--moss)]', icon: 'fa-circle-check' },
+                error:   { bg: 'bg-red-700',        icon: 'fa-circle-exclamation' },
+                info:    { bg: 'bg-stone-900',      icon: 'fa-circle-info' },
+            }[type] || {};
+            toast.className = `anim-slide ${palette.bg} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium max-w-xs`;
+            toast.innerHTML = `<i class="fa-solid ${palette.icon}"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.transition = 'opacity .3s ease, transform .3s ease';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(16px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // --- PWA / Push bildirimleri ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js', { scope: '/' }).catch((e) => {
+                console.error('SW register error:', e);
+            });
+        }
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+            return outputArray;
+        }
+
+        function pushSupported() {
+            return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+        }
+
+        async function isPushSubscribed() {
+            if (!pushSupported()) return false;
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                return !!sub;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function enablePushNotifications() {
+            if (!pushSupported()) {
+                showToast('Bu tarayıcı bildirimleri desteklemiyor. iPhone\'da önce Vault\'u ana ekrana eklemen gerekiyor.', 'error');
+                return false;
+            }
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') {
+                    showToast('Bildirim izni verilmedi', 'error');
+                    return false;
+                }
+                const keyRes = await fetch('/api/push/public-key');
+                const keyData = await keyRes.json();
+                if (!keyData.publicKey) {
+                    showToast('Bildirim sistemi sunucuda henüz ayarlanmamış', 'error');
+                    return false;
+                }
+                const reg = await navigator.serviceWorker.ready;
+                let sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+                    });
+                }
+                await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sub),
+                });
+                showToast('Bildirimler açıldı', 'success');
+                return true;
+            } catch (err) {
+                console.error('Push subscribe error:', err);
+                showToast('HATA: ' + (err.name || '') + ' - ' + (err.message || err), 'error');
+                return false;
+            }
+        }
+
+        async function disablePushNotifications() {
+            if (!pushSupported()) return false;
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                if (sub) {
+                    const endpoint = sub.endpoint;
+                    await sub.unsubscribe();
+                    await fetch('/api/push/unsubscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ endpoint }),
+                    });
+                }
+                showToast('Bildirimler kapatıldı', 'info');
+                return true;
+            } catch (err) {
+                console.error('Push unsubscribe error:', err);
+                showToast('Bildirimler kapatılamadı', 'error');
+                return false;
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
