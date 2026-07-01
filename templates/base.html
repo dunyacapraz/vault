@@ -45,7 +45,8 @@
             --line: #2c2c30;
             --surface: #1c1c20;
         }
-        body { font-family: 'Inter', sans-serif; background-color: var(--paper); color: var(--ink); transition: background-color .2s ease, color .2s ease; }
+        html { overscroll-behavior-y: contain; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--paper); color: var(--ink); transition: background-color .2s ease, color .2s ease; overscroll-behavior-y: contain; }
         .font-display { font-family: 'Inter', sans-serif; letter-spacing: -0.03em; font-weight: 700; }
         .font-mono { font-family: 'JetBrains Mono', monospace; letter-spacing: -0.01em; }
 
@@ -220,40 +221,62 @@
             const THRESHOLD = 70;
             let startY = 0;
             let pulling = false;
+            let armed = false; // touchstart en üstte mi başladı
             let refreshing = false;
 
+            function scrollPos() {
+                return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+            }
+
             document.addEventListener('touchstart', (e) => {
-                if (window.scrollY === 0 && !refreshing) {
+                if (refreshing) { armed = false; return; }
+                if (scrollPos() <= 0 && e.touches.length === 1) {
                     startY = e.touches[0].clientY;
-                    pulling = true;
-                } else {
+                    armed = true;
                     pulling = false;
+                } else {
+                    armed = false;
                 }
             }, { passive: true });
 
             document.addEventListener('touchmove', (e) => {
-                if (!pulling || refreshing) return;
+                if (!armed || refreshing) return;
                 const diff = e.touches[0].clientY - startY;
-                if (diff > 0 && window.scrollY === 0) {
+                // Sayfa hâlâ en üstteyken aşağı çekiliyorsa: native bounce'ı iptal et, kendi göstergemizi çiz
+                if (diff > 0 && scrollPos() <= 0) {
+                    pulling = true;
+                    e.preventDefault();
                     const height = Math.min(diff * 0.5, 90);
                     indicator.style.height = height + 'px';
-                    icon.style.transform = diff * 0.5 >= THRESHOLD ? 'rotate(180deg)' : 'rotate(0deg)';
+                    icon.style.transform = height >= THRESHOLD ? 'rotate(180deg)' : 'rotate(0deg)';
+                } else if (diff <= 0) {
+                    // Kullanıcı geri yukarı kaydırdı, iptal
+                    pulling = false;
+                    indicator.style.height = '0px';
                 }
-            }, { passive: true });
+            }, { passive: false });
 
             document.addEventListener('touchend', () => {
-                if (!pulling || refreshing) return;
+                armed = false;
+                if (!pulling || refreshing) { pulling = false; return; }
                 pulling = false;
-                const currentHeight = parseInt(indicator.style.height || '0', 10);
+                const currentHeight = parseFloat(indicator.style.height) || 0;
                 if (currentHeight >= THRESHOLD) {
                     refreshing = true;
                     indicator.style.height = '50px';
                     icon.className = 'fa-solid fa-spinner fa-spin';
+                    icon.style.transform = 'none';
                     window.location.reload();
                 } else {
                     indicator.style.height = '0px';
                 }
-            }, { passive: true });
+            });
+
+            document.addEventListener('touchcancel', () => {
+                armed = false;
+                pulling = false;
+                if (!refreshing) indicator.style.height = '0px';
+            });
         })();
         document.addEventListener('DOMContentLoaded', () => {
             const pending = sessionStorage.getItem('pending_toast');
