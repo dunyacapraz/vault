@@ -42,6 +42,7 @@ META_TRIPS_KEY = "_meta/trips.json"
 META_EVENTS_KEY = "_meta/events.json"
 META_USERS_KEY = "_meta/users.json"
 META_PUSH_KEY = "_meta/push_subscriptions.json"
+META_FEED_KEY = "_meta/feed.json"
 
 # ---------------------------------------------------------------------------
 # Web Push (PWA bildirimleri) yapılandırması — .env dosyasından okunur.
@@ -218,6 +219,18 @@ def save_push_subscriptions(subs):
     r2_write_json(META_PUSH_KEY, subs)
 
 
+def load_feed():
+    return r2_read_json(META_FEED_KEY, [])
+
+
+def save_feed(posts):
+    r2_write_json(META_FEED_KEY, posts)
+
+
+def find_feed_post(posts, post_id):
+    return next((p for p in posts if p['id'] == post_id), None)
+
+
 def send_push_notification(payload, exclude_username=None, only_username=None):
     """Tüm üyelere (isteğe bağlı biri hariç) ya da tek bir kullanıcıya (only_username)
     push bildirimi gönderir. Push ayarlanmamışsa veya hata olursa sessizce geçer —
@@ -355,6 +368,15 @@ def index():
     trips_sorted = sorted(trips, key=lambda t: t.get('created_at', ''), reverse=True)
     return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
                             events=events, all_events=load_events())
+
+
+@app.route('/feed')
+@login_required
+def feed_page():
+    user = current_user()
+    posts = load_feed()
+    posts_sorted = sorted(posts, key=lambda p: p.get('created_at', ''), reverse=True)
+    return render_template('feed.html', user=user, posts=posts_sorted, users=public_users())
 
 
 @app.route('/trip/<trip_id>')
@@ -939,6 +961,114 @@ def delete_comment(trip_id, filename, comment_id):
 
     entry['comments'] = [c for c in entry['comments'] if c['id'] != comment_id]
     save_trips(trips)
+
+    return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Feed / Keşfet — profil sistemi olmadan, herkesin anlık görsel paylaşabildiği akış
+# ---------------------------------------------------------------------------
+@app.route('/api/feed/upload', methods=['POST'])
+@login_required
+def feed_upload():
+    user = current_user()
+    file = request.files.get('file')
+    caption = (request.form.get('caption') or '').strip()
+
+    if not file or file.filename == '':
+        return jsonify({"status": "error", "message": "Dosya seçilmedi"}), 400
+    if not allowed_file(file.filename):
+        return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
+    if len(caption) > 300:
+        return jsonify({"status": "error", "message": "Açıklama çok uzun"}), 400
+
+    post_id = uuid.uuid4().hex[:12]
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    unique_name = f"{uuid.uuid4().hex[:10]}.{ext}"
+
+    try:
+        r2_upload(file.stream, post_id, unique_name, content_type=file.mimetype)
+    except ClientError as e:
+        print(f"[R2 UPLOAD HATASI] {file.filename}: {e}")
+        return jsonify({"status": "error", "message": "Yükleme başarısız oldu"}), 500
+    except Exception as e:
+        print(f"[BEKLENMEYEN YÜKLEME HATASI] {file.filename}: {e}")
+        return jsonify({"status": "error", "message": "Yükleme başarısız oldu"}), 500
+
+    post = {
+        "id": post_id,
+        "filename": unique_name,
+        "type": media_type(unique_name),
+        "caption": caption,
+        "posted_by": user['username'],
+        "created_at": datetime.utcnow().isoformat(),
+        "likes": [],
+    }
+
+    posts = load_feed()
+    posts.append(post)
+    save_feed(posts)
+
+    try:
+        body = f"{user['name']} bir şey paylaştı" + (f": \"{caption}\"" if caption else "")
+        send_push_notification(
+            {"title": "✨ Yeni paylaşım", "body": body, "url": "/feed", "tag": f"feed-{post_id}"},
+            exclude_username=user['username'],
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
+
+    return jsonify({"status": "success", "post": post})
+
+
+@app.route('/api/feed/<post_id>/like', methods=['POST'])
+@login_required
+def feed_toggle_like(post_id):
+    user = current_user()
+    posts = load_feed()
+    post = find_feed_post(posts, post_id)
+    if not post:
+        return jsonify({"status": "error", "message": "Paylaşım bulunamadı"}), 404
+
+    likes = post.setdefault('likes', [])
+    if user['username'] in likes:
+        likes.remove(user['username'])
+        liked = False
+    else:
+        likes.append(user['username'])
+        liked = True
+
+    save_feed(posts)
+
+    if liked and post.get('posted_by'):
+        try:
+            send_push_notification(
+                {"title": "❤️ Yeni beğeni", "body": f"{user['name']} paylaşımını beğendi", "url": "/feed", "tag": f"feed-like-{post_id}"},
+                exclude_username=user['username'],
+                only_username=post.get('posted_by'),
+            )
+        except Exception as e:
+            print(f"[PUSH GÖNDERİM HATASI] {e}")
+
+    return jsonify({"status": "success", "liked": liked, "like_count": len(likes)})
+
+
+@app.route('/api/feed/<post_id>/delete', methods=['POST'])
+@login_required
+def feed_delete(post_id):
+    user = current_user()
+    posts = load_feed()
+    post = find_feed_post(posts, post_id)
+    if not post:
+        return jsonify({"status": "error", "message": "Paylaşım bulunamadı"}), 404
+
+    if post.get('posted_by') != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Bu paylaşımı sadece paylaşan kişi veya admin silebilir"}), 403
+
+    posts.remove(post)
+    save_feed(posts)
+
+    r2_delete_prefix(post_id)
 
     return jsonify({"status": "success"})
 
