@@ -218,20 +218,30 @@ def save_push_subscriptions(subs):
     r2_write_json(META_PUSH_KEY, subs)
 
 
-def send_push_notification(payload, exclude_username=None):
-    """Tüm üyelere (isteğe bağlı biri hariç) push bildirimi gönderir.
-    Push ayarlanmamışsa veya hata olursa sessizce geçer — bildirim asla ana işlemi bozmaz."""
+def send_push_notification(payload, exclude_username=None, only_username=None):
+    """Tüm üyelere (isteğe bağlı biri hariç) ya da tek bir kullanıcıya (only_username)
+    push bildirimi gönderir. Push ayarlanmamışsa veya hata olursa sessizce geçer —
+    bildirim asla ana işlemi bozmaz."""
     if not PUSH_CONFIGURED:
+        return
+    if only_username and only_username == exclude_username:
         return
 
     subs = load_push_subscriptions()
     if not subs:
         return
 
+    if only_username:
+        if only_username not in subs:
+            return
+        subs_to_send = {only_username: subs[only_username]}
+    else:
+        subs_to_send = subs
+
     changed = False
     body = json.dumps(payload, ensure_ascii=False)
 
-    for username, sub_list in list(subs.items()):
+    for username, sub_list in list(subs_to_send.items()):
         if username == exclude_username:
             continue
         still_valid = []
@@ -595,6 +605,14 @@ def create_trip():
     trips.append(trip)
     save_trips(trips)
 
+    try:
+        send_push_notification(
+            {"title": "🗂️ Yeni albüm oluşturuldu", "body": f"{user['name']} \"{title}\" adında yeni bir albüm oluşturdu", "url": f"/trip/{trip_id}", "tag": f"trip-new-{trip_id}"},
+            exclude_username=user['username'],
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
+
     return jsonify({"status": "success", "trip": trip})
 
 
@@ -743,6 +761,16 @@ def edit_media(trip_id, filename):
     entry['memory_date'] = memory_date
     save_trips(trips)
 
+    if entry.get('uploaded_by') and entry['uploaded_by'] != user['username']:
+        try:
+            send_push_notification(
+                {"title": "✏️ Anı düzenlendi", "body": f"{user['name']} eklediğin bir anıyı düzenledi", "url": f"/trip/{trip_id}", "tag": f"edit-{trip_id}-{filename}"},
+                exclude_username=user['username'],
+                only_username=entry.get('uploaded_by'),
+            )
+        except Exception as e:
+            print(f"[PUSH GÖNDERİM HATASI] {e}")
+
     return jsonify({"status": "success", "caption": caption, "memory_date": memory_date})
 
 
@@ -770,6 +798,14 @@ def delete_media(trip_id, filename):
     save_trips(trips)
 
     r2_delete(trip_id, filename)
+
+    try:
+        send_push_notification(
+            {"title": "🗑️ Bir anı silindi", "body": f"{user['name']} \"{trip['title']}\" albümünden bir anı sildi", "url": f"/trip/{trip_id}", "tag": f"delete-{trip_id}-{filename}"},
+            exclude_username=user['username'],
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
 
     return jsonify({"status": "success"})
 
@@ -824,6 +860,17 @@ def toggle_like(trip_id, filename):
         liked = True
 
     save_trips(trips)
+
+    if liked:
+        try:
+            send_push_notification(
+                {"title": "❤️ Yeni beğeni", "body": f"{user['name']} bir anını beğendi", "url": f"/trip/{trip_id}", "tag": f"like-{trip_id}-{filename}"},
+                exclude_username=user['username'],
+                only_username=entry.get('uploaded_by'),
+            )
+        except Exception as e:
+            print(f"[PUSH GÖNDERİM HATASI] {e}")
+
     return jsonify({"status": "success", "liked": liked, "like_count": len(likes)})
 
 
@@ -856,6 +903,16 @@ def add_comment(trip_id, filename):
     }
     entry['comments'].append(comment)
     save_trips(trips)
+
+    try:
+        preview = text if len(text) <= 80 else text[:77] + '...'
+        send_push_notification(
+            {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": f"/trip/{trip_id}", "tag": f"comment-{trip_id}-{filename}"},
+            exclude_username=user['username'],
+            only_username=entry.get('uploaded_by'),
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
 
     return jsonify({"status": "success", "comment": comment})
 
@@ -918,6 +975,15 @@ def create_event():
     events = load_events()
     events.append(event)
     save_events(events)
+
+    try:
+        send_push_notification(
+            {"title": "📅 Yeni etkinlik eklendi", "body": f"{user['name']} \"{title}\" etkinliğini ekledi ({date})", "url": "/", "tag": f"event-new-{event['id']}"},
+            exclude_username=user['username'],
+        )
+    except Exception as e:
+        print(f"[PUSH GÖNDERİM HATASI] {e}")
+
     return jsonify({"status": "success", "event": event})
 
 
