@@ -28,7 +28,7 @@
             <a href="/feed" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Keşfet">
                 <i class="fa-solid fa-compass"></i>
             </a>
-            <button id="push-toggle-btn" onclick="handlePushToggle()" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Bildirimleri Aç">
+            <button id="push-toggle-btn" onclick="openNotificationModal()" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Bildirim Ayarları">
                 <i id="push-toggle-icon" class="fa-regular fa-bell"></i>
             </button>
             <a href="/account" class="btn-press text-stone-500 hover:text-stone-800 hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Hesap Ayarları">
@@ -171,6 +171,41 @@
 </div>
 
 <!-- Yeni Etkinlik Modalı -->
+<div id="notif-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
+    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-sm p-7">
+        <div class="flex items-center justify-between mb-5">
+            <h3 class="font-display text-xl font-semibold">Bildirim Ayarları</h3>
+            <button onclick="closeNotificationModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="space-y-5">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
+                        <i id="notif-modal-icon" class="fa-regular fa-bell text-stone-500"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-sm leading-tight">Bildirimler</p>
+                        <p id="notif-modal-status" class="text-xs text-stone-500 mt-0.5">Kontrol ediliyor...</p>
+                    </div>
+                </div>
+                <button id="notif-toggle-switch" onclick="handleNotifSwitchClick()"
+                        class="btn-press relative inline-flex h-7 w-12 items-center rounded-full transition-colors shrink-0 bg-stone-300"
+                        role="switch" aria-checked="false">
+                    <span id="notif-toggle-knob" class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform translate-x-1"></span>
+                </button>
+            </div>
+            <p class="text-xs text-stone-400 leading-relaxed">
+                Açık olduğunda yeni anılar, albümler, etkinlikler, yorumlar ve beğeniler için bu cihaza bildirim gönderilir.
+            </p>
+            <div id="notif-modal-denied-hint" class="hidden bg-amber-50 text-amber-800 p-3 rounded-lg text-xs border border-amber-200">
+                Bildirimlere izin verilmemiş görünüyor. iPhone'da Ayarlar &gt; Bildirimler &gt; Vault yolundan elle açman gerekiyor.
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="event-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
     <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
         <div class="flex items-center justify-between mb-5">
@@ -271,28 +306,85 @@
             btn.title = 'Bildirimler açık';
         } else {
             icon.className = 'fa-regular fa-bell';
-            btn.title = 'Bildirimleri Aç';
+            btn.title = 'Bildirim Ayarları';
         }
+        return subscribed;
     }
-    async function handlePushToggle() {
-        // iOS Safari, izin penceresini ancak Notification.requestPermission()
-        // tıklama olayına araya başka await girmeden bağlıysa gösterir.
-        // Bu yüzden önce senkron permission kontrolü yapıyoruz, izin isteme
-        // çağrısını mümkün olduğunca erken tetikliyoruz.
-        if (Notification.permission === 'denied') {
-            showToast('Bildirimlere izin verilmemiş. iPhone\'da Ayarlar > Bildirimler > Vault yolundan elle açman gerekiyor.', 'error');
+
+    async function refreshNotifModal() {
+        const switchBtn = document.getElementById('notif-toggle-switch');
+        const knob = document.getElementById('notif-toggle-knob');
+        const statusText = document.getElementById('notif-modal-status');
+        const modalIcon = document.getElementById('notif-modal-icon');
+        const deniedHint = document.getElementById('notif-modal-denied-hint');
+
+        if (!pushSupported()) {
+            statusText.textContent = 'Bu tarayıcı desteklemiyor';
+            deniedHint.classList.remove('hidden');
+            deniedHint.textContent = 'Bu tarayıcı bildirimleri desteklemiyor. iPhone\'da önce Vault\'u ana ekrana eklemen gerekiyor.';
+            switchBtn.classList.add('opacity-40', 'cursor-not-allowed');
             return;
         }
-        if (Notification.permission === 'granted') {
-            const subscribed = await isPushSubscribed();
-            if (subscribed) {
-                showToast('Bildirimler zaten açık', 'info');
-                return;
-            }
+
+        if (Notification.permission === 'denied') {
+            statusText.textContent = 'İzin verilmemiş';
+            switchBtn.classList.remove('bg-[var(--amber-deep)]');
+            switchBtn.classList.add('bg-stone-300');
+            knob.classList.remove('translate-x-6');
+            knob.classList.add('translate-x-1');
+            switchBtn.setAttribute('aria-checked', 'false');
+            modalIcon.className = 'fa-regular fa-bell-slash text-stone-500';
+            deniedHint.classList.remove('hidden');
+            return;
         }
-        await enablePushNotifications();
-        refreshPushToggleIcon();
+        deniedHint.classList.add('hidden');
+
+        const subscribed = await isPushSubscribed();
+        if (subscribed) {
+            statusText.textContent = 'Açık';
+            switchBtn.classList.remove('bg-stone-300');
+            switchBtn.classList.add('bg-[var(--amber-deep)]');
+            knob.classList.remove('translate-x-1');
+            knob.classList.add('translate-x-6');
+            switchBtn.setAttribute('aria-checked', 'true');
+            modalIcon.className = 'fa-solid fa-bell text-[var(--amber-deep)]';
+        } else {
+            statusText.textContent = 'Kapalı';
+            switchBtn.classList.remove('bg-[var(--amber-deep)]');
+            switchBtn.classList.add('bg-stone-300');
+            knob.classList.remove('translate-x-6');
+            knob.classList.add('translate-x-1');
+            switchBtn.setAttribute('aria-checked', 'false');
+            modalIcon.className = 'fa-regular fa-bell text-stone-500';
+        }
     }
+
+    async function handleNotifSwitchClick() {
+        if (!pushSupported() || Notification.permission === 'denied') return;
+        const switchBtn = document.getElementById('notif-toggle-switch');
+        switchBtn.classList.add('opacity-60');
+        const currentlySubscribed = await isPushSubscribed();
+        if (currentlySubscribed) {
+            await disablePushNotifications();
+        } else {
+            await enablePushNotifications();
+        }
+        switchBtn.classList.remove('opacity-60');
+        await refreshNotifModal();
+        await refreshPushToggleIcon();
+    }
+
+    function openNotificationModal() {
+        document.getElementById('notif-modal').classList.remove('hidden');
+        refreshNotifModal();
+    }
+    function closeNotificationModal() {
+        document.getElementById('notif-modal').classList.add('hidden');
+    }
+    document.getElementById('notif-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'notif-modal') closeNotificationModal();
+    });
+
     refreshPushToggleIcon();
 
     async function logout() {
