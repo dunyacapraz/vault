@@ -59,6 +59,37 @@
             {% endif %}
         </div>
 
+        {% if view == 'home' and on_this_day|default([]) %}
+        <div class="anim-fade-up mb-9">
+            <h2 class="font-display text-xl font-semibold flex items-center gap-2 mb-3">
+                <i class="fa-solid fa-clock-rotate-left text-[var(--amber)]"></i> Bugün Ne Oldu
+            </h2>
+            <div class="flex gap-3 overflow-x-auto pb-2 stagger">
+                {% for m in on_this_day %}
+                <a href="/trip/{{ m.trip_id }}" class="shrink-0 w-48 bg-white border border-[var(--line)] rounded-2xl overflow-hidden group">
+                    <div class="relative aspect-square bg-stone-200 overflow-hidden">
+                        {% if m.media.type == 'video' %}
+                        <video src="/uploads/{{ m.trip_id }}/{{ m.media.filename }}" class="w-full h-full object-cover object-top" muted></video>
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <i class="fa-solid fa-circle-play text-white text-2xl drop-shadow"></i>
+                        </div>
+                        {% else %}
+                        <img src="/uploads/{{ m.trip_id }}/{{ m.media.filename }}" alt="" class="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500">
+                        {% endif %}
+                        <span class="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[11px] font-semibold px-2 py-1 rounded-full">
+                            {{ m.years_ago }} yıl önce bugün
+                        </span>
+                    </div>
+                    <div class="px-3 py-2.5">
+                        <p class="text-sm font-semibold truncate">{{ m.trip_title }}</p>
+                        <p class="text-xs text-stone-400 mt-0.5">{{ m.date.strftime('%d.%m.%Y') }}</p>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if view == 'home' and all_events %}
         <div id="events" class="anim-fade-up mb-9 scroll-mt-24">
             <div class="flex items-center justify-between mb-3">
