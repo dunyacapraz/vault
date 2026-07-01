@@ -208,6 +208,13 @@ def find_trip(trips, trip_id):
     return next((t for t in trips if t['id'] == trip_id), None)
 
 
+def trip_sort_key(t):
+    """Albümleri sıralamak için: kullanıcının girdiği 'tarih' varsa onu kullan
+    (böylece 2023'te yaşanmış bir anı, bugün eklenmiş olsa bile eski tarihliler
+    arasında altta kalır), yoksa albümün oluşturulma zamanına göre sırala."""
+    return t.get('date') or t.get('created_at', '')
+
+
 def media_sort_key(m):
     """Sıralama için tarih anahtarı: kullanıcı 'anı tarihi' girdiyse onu, girmediyse
     yükleme zamanını kullanır. Böylece yeni tarihliler üstte, eski tarihliler altta kalır."""
@@ -241,7 +248,11 @@ def save_feed(posts):
 
 
 def find_feed_post(posts, post_id):
-    return next((p for p in posts if p['id'] == post_id), None)
+    post = next((p for p in posts if p['id'] == post_id), None)
+    if post is not None:
+        post.setdefault('likes', [])
+        post.setdefault('comments', [])
+    return post
 
 
 def send_push_notification(payload, exclude_username=None, only_username=None):
@@ -378,7 +389,7 @@ def index():
         return render_template('login.html', events=events)
 
     trips = load_trips()
-    trips_sorted = sorted(trips, key=lambda t: t.get('created_at', ''), reverse=True)
+    trips_sorted = sorted(trips, key=trip_sort_key, reverse=True)
     return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
                             events=events, all_events=load_events())
 
@@ -388,6 +399,9 @@ def index():
 def feed_page():
     user = current_user()
     posts = load_feed()
+    for p in posts:
+        p.setdefault('likes', [])
+        p.setdefault('comments', [])
     posts_sorted = sorted(posts, key=lambda p: p.get('created_at', ''), reverse=True)
     return render_template('feed.html', user=user, posts=posts_sorted, users=public_users())
 
@@ -1016,6 +1030,7 @@ def feed_upload():
         "posted_by": user['username'],
         "created_at": datetime.utcnow().isoformat(),
         "likes": [],
+        "comments": [],
     }
 
     posts = load_feed()
@@ -1082,6 +1097,68 @@ def feed_delete(post_id):
     save_feed(posts)
 
     r2_delete_prefix(post_id)
+
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/feed/<post_id>/comments', methods=['POST'])
+@login_required
+def feed_add_comment(post_id):
+    user = current_user()
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()
+
+    if not text:
+        return jsonify({"status": "error", "message": "Yorum boş olamaz"}), 400
+    if len(text) > 500:
+        return jsonify({"status": "error", "message": "Yorum çok uzun"}), 400
+
+    posts = load_feed()
+    post = find_feed_post(posts, post_id)
+    if not post:
+        return jsonify({"status": "error", "message": "Paylaşım bulunamadı"}), 404
+
+    comment = {
+        "id": uuid.uuid4().hex[:10],
+        "username": user['username'],
+        "text": text,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    post['comments'].append(comment)
+    save_feed(posts)
+
+    if post.get('posted_by') and post['posted_by'] != user['username']:
+        try:
+            preview = text if len(text) <= 80 else text[:77] + '...'
+            send_push_notification(
+                {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": "/feed", "tag": f"feed-comment-{post_id}"},
+                exclude_username=user['username'],
+                only_username=post.get('posted_by'),
+            )
+        except Exception as e:
+            print(f"[PUSH GÖNDERİM HATASI] {e}")
+
+    return jsonify({"status": "success", "comment": comment})
+
+
+@app.route('/api/feed/<post_id>/comments/<comment_id>/delete', methods=['POST'])
+@login_required
+def feed_delete_comment(post_id, comment_id):
+    user = current_user()
+    posts = load_feed()
+    post = find_feed_post(posts, post_id)
+    if not post:
+        return jsonify({"status": "error", "message": "Paylaşım bulunamadı"}), 404
+
+    comment = next((c for c in post['comments'] if c['id'] == comment_id), None)
+    if not comment:
+        return jsonify({"status": "error", "message": "Yorum bulunamadı"}), 404
+
+    if comment['username'] != user['username'] and post.get('posted_by') != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Bu yorumu sadece yazan kişi, paylaşımı yapan veya admin silebilir"}), 403
+
+    post['comments'] = [c for c in post['comments'] if c['id'] != comment_id]
+    save_feed(posts)
 
     return jsonify({"status": "success"})
 
