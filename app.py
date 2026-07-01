@@ -1315,6 +1315,41 @@ def create_event():
     return jsonify({"status": "success", "event": event})
 
 
+@app.route('/api/events/<event_id>/edit', methods=['POST'])
+@login_required
+def edit_event(event_id):
+    user = current_user()
+    events = load_events()
+    event = next((e for e in events if e['id'] == event_id), None)
+    if not event:
+        return jsonify({"status": "error", "message": "Etkinlik bulunamadı"}), 404
+
+    if event['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Sadece etkinliği ekleyen kişi düzenleyebilir"}), 403
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    date = (data.get('date') or '').strip()
+    time = (data.get('time') or '').strip()
+    location = (data.get('location') or '').strip()
+
+    if not title or not date:
+        return jsonify({"status": "error", "message": "Başlık ve tarih gerekli"}), 400
+
+    updated = dict(event)
+    updated['title'] = title
+    updated['date'] = date
+    updated['time'] = time
+    updated['location'] = location
+
+    if event_datetime(updated) is None:
+        return jsonify({"status": "error", "message": "Geçersiz tarih/saat"}), 400
+
+    event.update({"title": title, "date": date, "time": time, "location": location})
+    save_events(events)
+    return jsonify({"status": "success", "event": event})
+
+
 @app.route('/api/events/<event_id>/delete', methods=['POST'])
 @login_required
 def delete_event(event_id):
@@ -1369,6 +1404,30 @@ def upload_event_image(event_id):
     event['image'] = filename
     save_events(events)
     return jsonify({"status": "success", "image": filename})
+
+
+@app.route('/api/events/<event_id>/image/delete', methods=['POST'])
+@login_required
+def delete_event_image(event_id):
+    user = current_user()
+    events = load_events()
+    event = next((e for e in events if e['id'] == event_id), None)
+    if not event:
+        return jsonify({"status": "error", "message": "Etkinlik bulunamadı"}), 404
+
+    if event['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Sadece etkinliği ekleyen kişi görseli kaldırabilir"}), 403
+
+    image = event.get('image')
+    if image:
+        try:
+            s3.delete_object(Bucket=R2_BUCKET_NAME, Key=f"events/{event_id}/{image}")
+        except ClientError:
+            pass
+        event.pop('image', None)
+        save_events(events)
+
+    return jsonify({"status": "success"})
 
 
 @app.route('/event-uploads/<event_id>/<filename>')
