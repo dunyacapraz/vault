@@ -74,9 +74,9 @@
                 </div>
                 <div class="bg-stone-100 aspect-square">
                     {% if post.type == 'video' %}
-                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-full object-cover" controls></video>
+                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-full object-cover object-top" controls></video>
                     {% else %}
-                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-full object-cover" loading="lazy">
+                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-full object-cover object-top" loading="lazy">
                     {% endif %}
                 </div>
                 <div class="px-4 py-3">
