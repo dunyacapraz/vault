@@ -1,0 +1,266 @@
+<div id="event-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
+    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-md p-7">
+        <div class="flex items-center justify-between mb-5">
+            <h3 id="event-modal-title" class="font-display text-xl font-semibold">Yeni Etkinlik</h3>
+            <button onclick="closeEventModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div id="event-error-msg" class="hidden bg-red-50 text-red-700 p-3 rounded-lg text-sm border border-red-200 text-center"></div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
+                <input type="text" id="event-title" placeholder="örn. Tekirdağ Buluşması"
+                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-stone-700 mb-1">Tarih</label>
+                    <input type="date" id="event-date"
+                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-stone-700 mb-1">Saat <span class="text-stone-400 font-normal">(ops.)</span></label>
+                    <input type="time" id="event-time"
+                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Yer <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
+                <input type="text" id="event-location" placeholder="örn. Tekirdağ"
+                    class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-stone-700 mb-1">Görsel <span class="text-stone-400 font-normal">(opsiyonel)</span></label>
+                <div class="flex items-center gap-2">
+                    <label for="event-image" id="event-image-drop" class="flex-1 flex items-center gap-3 border border-dashed border-stone-300 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[var(--amber)] transition-colors min-w-0">
+                        <img id="event-image-preview" class="hidden h-10 w-10 rounded-lg object-cover shrink-0" alt="">
+                        <i id="event-image-icon" class="fa-regular fa-image text-stone-400 text-lg shrink-0"></i>
+                        <span id="event-image-label" class="text-sm text-stone-500 truncate">Bir görsel seç...</span>
+                    </label>
+                    <button type="button" id="event-image-remove-btn" onclick="removeEventImage()" class="hidden shrink-0 h-10 w-10 rounded-lg border border-stone-300 text-stone-400 hover:text-red-500 hover:border-red-300 flex items-center justify-center transition-colors" title="Görseli kaldır">
+                        <i class="fa-regular fa-trash-can text-sm"></i>
+                    </button>
+                </div>
+                <input type="file" id="event-image" accept="image/*" class="hidden" onchange="handleEventImageSelected(this.files)">
+            </div>
+            <button onclick="submitNewEvent()" id="create-event-btn"
+                class="btn-press w-full fab-amber text-white font-semibold py-3 rounded-lg hover:brightness-105 transition-all shadow-md flex items-center justify-center gap-2">
+                <span id="create-event-btn-text">Etkinliği Ekle</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Etkinlikler (paylaşılan modal + mantık) ---
+    let selectedEventImageFile = null;
+    let removeExistingEventImage = false;
+    let editingEventId = null;
+    let editingEventHadImage = false;
+
+    function resetEventImageField() {
+        selectedEventImageFile = null;
+        removeExistingEventImage = false;
+        const input = document.getElementById('event-image');
+        if (input) input.value = '';
+        document.getElementById('event-image-preview').classList.add('hidden');
+        document.getElementById('event-image-icon').classList.remove('hidden');
+        document.getElementById('event-image-label').textContent = 'Bir görsel seç...';
+        document.getElementById('event-image-remove-btn').classList.add('hidden');
+    }
+
+    function handleEventImageSelected(files) {
+        const file = files && files[0];
+        if (!file) return;
+        selectedEventImageFile = file;
+        removeExistingEventImage = false;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const preview = document.getElementById('event-image-preview');
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+            document.getElementById('event-image-icon').classList.add('hidden');
+            document.getElementById('event-image-label').textContent = file.name;
+            document.getElementById('event-image-remove-btn').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function removeEventImage() {
+        selectedEventImageFile = null;
+        removeExistingEventImage = true;
+        const input = document.getElementById('event-image');
+        if (input) input.value = '';
+        document.getElementById('event-image-preview').classList.add('hidden');
+        document.getElementById('event-image-icon').classList.remove('hidden');
+        document.getElementById('event-image-label').textContent = 'Bir görsel seç...';
+        document.getElementById('event-image-remove-btn').classList.add('hidden');
+    }
+
+    function openEventModal(ev) {
+        document.getElementById('event-modal').classList.remove('hidden');
+        document.getElementById('event-error-msg').classList.add('hidden');
+        resetEventImageField();
+
+        const titleLabel = document.getElementById('event-modal-title');
+        const btnText = document.getElementById('create-event-btn-text');
+
+        if (ev && ev.id) {
+            editingEventId = ev.id;
+            editingEventHadImage = !!ev.image;
+            titleLabel.textContent = 'Etkinliği Düzenle';
+            btnText.textContent = 'Kaydet';
+            document.getElementById('event-title').value = ev.title || '';
+            document.getElementById('event-date').value = ev.date || '';
+            document.getElementById('event-time').value = ev.time || '';
+            document.getElementById('event-location').value = ev.location || '';
+            if (ev.image) {
+                const preview = document.getElementById('event-image-preview');
+                preview.src = `/event-uploads/${ev.id}/${ev.image}`;
+                preview.classList.remove('hidden');
+                document.getElementById('event-image-icon').classList.add('hidden');
+                document.getElementById('event-image-label').textContent = 'Mevcut görsel';
+                document.getElementById('event-image-remove-btn').classList.remove('hidden');
+            }
+        } else {
+            editingEventId = null;
+            editingEventHadImage = false;
+            titleLabel.textContent = 'Yeni Etkinlik';
+            btnText.textContent = 'Etkinliği Ekle';
+            document.getElementById('event-title').value = '';
+            document.getElementById('event-date').value = '';
+            document.getElementById('event-time').value = '';
+            document.getElementById('event-location').value = '';
+        }
+        document.getElementById('event-title').focus();
+    }
+    function closeEventModal() {
+        document.getElementById('event-modal').classList.add('hidden');
+    }
+    document.getElementById('event-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'event-modal') closeEventModal();
+    });
+
+    async function submitNewEvent() {
+        const titleEl = document.getElementById('event-title');
+        const dateEl = document.getElementById('event-date');
+        const timeEl = document.getElementById('event-time');
+        const locationEl = document.getElementById('event-location');
+        const errorMsg = document.getElementById('event-error-msg');
+        const btn = document.getElementById('create-event-btn');
+        const btnText = document.getElementById('create-event-btn-text');
+        const isEditing = !!editingEventId;
+
+        errorMsg.classList.add('hidden');
+
+        const title = (titleEl.value || '').trim();
+        const date = (dateEl.value || '').trim();
+        const time = (timeEl.value || '').trim();
+        const location = (locationEl.value || '').trim();
+
+        if (!title || !date) {
+            errorMsg.textContent = !date
+                ? 'Tarih alanı boş görünüyor. Takvim simgesine tıklayıp tarihi seçmeyi dene.'
+                : 'Başlık gerekli.';
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+
+        btn.disabled = true;
+        btnText.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+
+        try {
+            const url = isEditing ? `/api/events/${editingEventId}/edit` : '/api/events';
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, date, time, location })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                const eventId = isEditing ? editingEventId : (data.event && data.event.id);
+                if (selectedEventImageFile && eventId) {
+                    const formData = new FormData();
+                    formData.append('image', selectedEventImageFile);
+                    try {
+                        await fetch(`/api/events/${eventId}/image`, { method: 'POST', body: formData });
+                    } catch (imgErr) {
+                        console.error('event image upload error:', imgErr);
+                    }
+                } else if (isEditing && removeExistingEventImage && editingEventHadImage) {
+                    try {
+                        await fetch(`/api/events/${eventId}/image/delete`, { method: 'POST' });
+                    } catch (imgErr) {
+                        console.error('event image delete error:', imgErr);
+                    }
+                }
+                queueToast(isEditing ? 'Etkinlik güncellendi' : 'Etkinlik eklendi', 'success');
+                window.location.reload();
+            } else {
+                console.error('submitNewEvent failed:', res.status, data);
+                errorMsg.textContent = data.message || `Bir hata oluştu (${res.status})`;
+                errorMsg.classList.remove('hidden');
+                btn.disabled = false;
+                btnText.textContent = isEditing ? 'Kaydet' : 'Etkinliği Ekle';
+            }
+        } catch (err) {
+            console.error('submitNewEvent network error:', err);
+            errorMsg.textContent = 'Bağlantı hatası, tekrar dene.';
+            errorMsg.classList.remove('hidden');
+            btn.disabled = false;
+            btnText.textContent = isEditing ? 'Kaydet' : 'Etkinliği Ekle';
+        }
+    }
+
+    async function deleteEvent(eventId) {
+        if (!confirm('Bu etkinliği silmek istediğine emin misin?')) return;
+        try {
+            const res = await fetch(`/api/events/${eventId}/delete`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                queueToast('Etkinlik silindi', 'success');
+                window.location.reload();
+            } else {
+                showToast(data.message || 'Silinemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    // Etkinlik kartlarındaki geri sayım metinleri
+    function formatChip(diff) {
+        if (diff <= 0) return 'Başladı';
+        const days = Math.floor(diff / 86400000);
+        const hours = Math.floor((diff % 86400000) / 3600000);
+        if (days > 0) return `${days} gün ${hours} saat kaldı`;
+        const mins = Math.floor((diff % 3600000) / 60000);
+        if (hours > 0) return `${hours} saat ${mins} dk kaldı`;
+        const secs = Math.floor((diff % 60000) / 1000);
+        return `${mins} dk ${secs} sn kaldı`;
+    }
+    function formatChipShort(diff) {
+        if (diff <= 0) return 'Başladı';
+        const days = Math.floor(diff / 86400000);
+        if (days > 0) return `${days} gün kaldı`;
+        const hours = Math.floor(diff / 3600000);
+        if (hours > 0) return `${hours} saat kaldı`;
+        const mins = Math.floor(diff / 60000);
+        return `${mins} dk kaldı`;
+    }
+    function tickChips() {
+        document.querySelectorAll('.countdown-chip').forEach(chip => {
+            const target = new Date(chip.dataset.target);
+            chip.textContent = formatChip(target - new Date());
+        });
+        document.querySelectorAll('.countdown-badge').forEach(chip => {
+            const target = new Date(chip.dataset.target);
+            chip.textContent = formatChipShort(target - new Date());
+        });
+    }
+    if (document.querySelector('.countdown-chip') || document.querySelector('.countdown-badge')) {
+        tickChips();
+        setInterval(tickChips, 1000);
+    }
+</script>
