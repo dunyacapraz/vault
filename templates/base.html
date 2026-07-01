@@ -275,35 +275,47 @@
                 return false;
             }
             try {
+                showToast('1) İzin isteniyor...', 'info');
                 const permission = await Notification.requestPermission();
+                showToast('2) İzin sonucu: ' + permission, 'info');
                 if (permission !== 'granted') {
                     showToast('Bildirim izni verilmedi', 'error');
                     return false;
                 }
+                showToast('3) Public key isteniyor...', 'info');
                 const keyRes = await fetch('/api/push/public-key');
                 const keyData = await keyRes.json();
+                showToast('4) Key geldi: ' + (keyData.publicKey ? keyData.publicKey.slice(0, 12) + '...' : 'YOK'), 'info');
                 if (!keyData.publicKey) {
                     showToast('Bildirim sistemi sunucuda henüz ayarlanmamış', 'error');
                     return false;
                 }
+                showToast('5) Service worker bekleniyor...', 'info');
                 const reg = await navigator.serviceWorker.ready;
+                showToast('6) SW hazır, abonelik kontrol ediliyor...', 'info');
                 let sub = await reg.pushManager.getSubscription();
                 if (!sub) {
+                    showToast('7) Yeni abonelik oluşturuluyor...', 'info');
                     sub = await reg.pushManager.subscribe({
                         userVisibleOnly: true,
                         applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
                     });
+                    showToast('8) Abonelik oluştu', 'info');
+                } else {
+                    showToast('7b) Zaten abone (mevcut sub bulundu)', 'info');
                 }
-                await fetch('/api/push/subscribe', {
+                showToast('9) Sunucuya kaydediliyor...', 'info');
+                const subRes = await fetch('/api/push/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(sub),
                 });
+                showToast('10) Sunucu cevabı: ' + subRes.status, subRes.ok ? 'success' : 'error');
                 showToast('Bildirimler açıldı', 'success');
                 return true;
             } catch (err) {
                 console.error('Push subscribe error:', err);
-                showToast('Bildirim hatası: ' + (err.name || '') + ' - ' + (err.message || err), 'error');
+                showToast('HATA: ' + (err.name || '') + ' - ' + (err.message || err), 'error');
                 return false;
             }
         }
