@@ -242,7 +242,9 @@
 
         // --- PWA / Push bildirimleri ---
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+            navigator.serviceWorker.register('/static/sw.js', { scope: '/' }).catch((e) => {
+                console.error('SW register error:', e);
+            });
         }
 
         function urlBase64ToUint8Array(base64String) {
