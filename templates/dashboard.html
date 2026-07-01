@@ -2,7 +2,7 @@
 {% block title %}Vault | Albümler{% endblock %}
 {% block content %}
 <script>document.body.classList.add('has-topbar');</script>
-{% set active = 'home' %}
+{% set active = view %}
 <div class="app-shell">
     {% include "_sidebar.html" %}
     <div class="app-main min-h-screen">
@@ -41,15 +41,25 @@
     <main class="px-5 sm:px-8 py-8 max-w-6xl mx-auto">
         <div class="anim-fade-up mb-8 flex flex-wrap items-center justify-between gap-4">
             <div>
+                {% if view == 'favorites' %}
+                <h1 class="font-display text-2xl sm:text-3xl font-semibold tracking-tight"><i class="fa-solid fa-star text-amber-400 mr-1"></i> Favorilerin</h1>
+                <p class="text-stone-500 mt-1 text-sm">Yıldızladığın albümler burada.</p>
+                {% elif view == 'archive' %}
+                <h1 class="font-display text-2xl sm:text-3xl font-semibold tracking-tight"><i class="fa-solid fa-box-archive text-stone-400 mr-1"></i> Arşiv</h1>
+                <p class="text-stone-500 mt-1 text-sm">Arşivlediğin albümler burada, ana sayfada görünmez.</p>
+                {% else %}
                 <h1 class="font-display text-2xl sm:text-3xl font-semibold tracking-tight">Hoş geldin, {{ user.name }}! 👋</h1>
                 <p class="text-stone-500 mt-1 text-sm">Anılarını keşfetmeye devam et.</p>
+                {% endif %}
             </div>
+            {% if view == 'home' %}
             <button onclick="openCreateModal()" class="btn-press fab-amber text-white px-5 py-3 rounded-xl font-medium shadow-md hover:brightness-105 transition-all flex items-center gap-2">
                 <i class="fa-solid fa-plus"></i> Yeni Tatil Ekle
             </button>
+            {% endif %}
         </div>
 
-        {% if all_events %}
+        {% if view == 'home' and all_events %}
         <div id="events" class="anim-fade-up mb-9 scroll-mt-24">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="font-display text-xl font-semibold flex items-center gap-2">
@@ -80,6 +90,7 @@
         </div>
         {% endif %}
 
+        {% if view == 'home' %}
         {% set total_photos = namespace(n=0) %}
         {% for t in trips %}{% set total_photos.n = total_photos.n + t.media|length %}{% endfor %}
         <div class="anim-fade-up mb-9">
@@ -103,14 +114,17 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <div id="albums" class="flex flex-wrap items-end justify-between gap-4 mb-8 anim-fade-up scroll-mt-24">
             <div>
-                <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Tatiller &amp; Anılar</h1>
+                <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight">
+                    {% if view == 'favorites' %}Favori Albümler{% elif view == 'archive' %}Arşivlenenler{% else %}Tatiller &amp; Anılar{% endif %}
+                </h1>
                 <p class="text-stone-500 mt-1 text-sm">{{ trips|length }} albüm · {{ users|length }} üye</p>
             </div>
             <div class="flex gap-2">
-                {% if not all_events %}
+                {% if view == 'home' and not all_events %}
                 <button onclick="openEventModal()" class="btn-press bg-white border border-stone-300 text-stone-700 px-5 py-3 rounded-xl font-medium shadow-sm hover:bg-stone-50 transition-all flex items-center gap-2">
                     <i class="fa-solid fa-calendar-star"></i> Etkinlik Ekle
                 </button>
@@ -120,17 +134,42 @@
 
         {% if not trips %}
         <div class="anim-fade-up text-center py-24 border-2 border-dashed border-stone-300 rounded-3xl bg-white/60">
+            {% if view == 'favorites' %}
+            <i class="fa-regular fa-star text-stone-300 text-5xl mb-4"></i>
+            <p class="text-stone-500 font-medium">Henüz favori albümün yok.</p>
+            <p class="text-stone-400 text-sm mt-1">Bir albümün üzerindeki yıldıza tıklayarak favorilere ekle.</p>
+            {% elif view == 'archive' %}
+            <i class="fa-solid fa-box-archive text-stone-300 text-5xl mb-4"></i>
+            <p class="text-stone-500 font-medium">Arşivde hiç albüm yok.</p>
+            <p class="text-stone-400 text-sm mt-1">Bir albümü arşivlediğinde burada görünür.</p>
+            {% else %}
             <i class="fa-solid fa-suitcase-rolling text-stone-300 text-5xl mb-4"></i>
             <p class="text-stone-500 font-medium">Henüz hiç albüm yok.</p>
             <p class="text-stone-400 text-sm mt-1">İlk tatili sen ekle, anılar buradan başlasın.</p>
             <button onclick="openCreateModal()" class="btn-press mt-5 fab-amber text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:brightness-105 transition-all">
                 Albüm Oluştur
             </button>
+            {% endif %}
         </div>
         {% else %}
         <div class="stagger grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for trip in trips %}
-            <a href="/trip/{{ trip.id }}" class="trip-card block bg-white rounded-2xl overflow-hidden shadow-sm border border-[var(--line)] group">
+            {% set is_fav = user.username in trip.get('favorited_by', []) %}
+            {% set is_archived = user.username in trip.get('archived_by', []) %}
+            <div class="trip-card relative bg-white rounded-2xl overflow-hidden shadow-sm border border-[var(--line)] group">
+                <div class="absolute top-3 right-3 z-10 flex gap-1.5">
+                    <button onclick="event.preventDefault(); toggleFavorite('{{ trip.id }}', this)"
+                            class="fav-btn h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+                            title="Favorilere ekle/çıkar" data-fav="{{ 'true' if is_fav else 'false' }}">
+                        <i class="{{ 'fa-solid' if is_fav else 'fa-regular' }} fa-star text-sm {{ 'text-amber-400' if is_fav else '' }}"></i>
+                    </button>
+                    <button onclick="event.preventDefault(); toggleArchive('{{ trip.id }}', this)"
+                            class="archive-btn h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-sm flex items-center justify-center text-white transition-colors"
+                            title="Arşivle/çıkar" data-archived="{{ 'true' if is_archived else 'false' }}">
+                        <i class="{{ 'fa-solid fa-box-open' if is_archived else 'fa-solid fa-box-archive' }} text-sm"></i>
+                    </button>
+                </div>
+                <a href="/trip/{{ trip.id }}" class="block">
                 <div class="relative aspect-[4/3] bg-stone-200 overflow-hidden">
                     {% if trip.cover %}
                     <img src="/uploads/{{ trip.id }}/{{ trip.cover }}" alt="{{ trip.title }}"
@@ -159,7 +198,8 @@
                         </div>
                     </div>
                 </div>
-            </a>
+                </a>
+            </div>
             {% endfor %}
         </div>
         {% endif %}
@@ -541,6 +581,51 @@
 
     refreshPushToggleIcon();
     refreshUnreadBadge();
+
+    async function toggleFavorite(tripId, btn) {
+        try {
+            const res = await fetch(`/api/trips/${tripId}/favorite`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { showToast(data.message || 'İşlem başarısız', 'error'); return; }
+            const icon = btn.querySelector('i');
+            if (data.favorited) {
+                icon.className = 'fa-solid fa-star text-sm text-amber-400';
+                showToast('Favorilere eklendi', 'success');
+            } else {
+                icon.className = 'fa-regular fa-star text-sm';
+                showToast('Favorilerden çıkarıldı', 'info');
+                {% if view == 'favorites' %}
+                btn.closest('.trip-card').remove();
+                {% endif %}
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    async function toggleArchive(tripId, btn) {
+        try {
+            const res = await fetch(`/api/trips/${tripId}/archive`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) { showToast(data.message || 'İşlem başarısız', 'error'); return; }
+            const icon = btn.querySelector('i');
+            if (data.archived) {
+                icon.className = 'fa-solid fa-box-open text-sm';
+                showToast('Albüm arşivlendi', 'success');
+                {% if view == 'home' %}
+                btn.closest('.trip-card').remove();
+                {% endif %}
+            } else {
+                icon.className = 'fa-solid fa-box-archive text-sm';
+                showToast('Arşivden çıkarıldı', 'info');
+                {% if view == 'archive' %}
+                btn.closest('.trip-card').remove();
+                {% endif %}
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
 
     async function logout() {
         try {
