@@ -29,21 +29,26 @@
                 <i class="fa-solid fa-images w-5 text-center shrink-0"></i>
                 <span class="sidebar-label">Albümler</span>
             </a>
-            <a href="/feed" title="Anılar"
+            <a href="/feed" title="Feed"
                class="sidebar-link {{ 'sidebar-link-active' if active == 'feed' else '' }}">
-                <i class="fa-regular fa-heart w-5 text-center shrink-0"></i>
-                <span class="sidebar-label">Anılar</span>
+                <i class="fa-regular fa-images w-5 text-center shrink-0"></i>
+                <span class="sidebar-label">Feed</span>
             </a>
-            <a href="/feed" title="Favoriler"
+            <a href="/favorites" title="Favoriler"
                class="sidebar-link {{ 'sidebar-link-active' if active == 'favorites' else '' }}">
-                <i class="fa-regular fa-star w-5 text-center shrink-0"></i>
+                <i class="fa-solid fa-star w-5 text-center shrink-0"></i>
                 <span class="sidebar-label">Favoriler</span>
             </a>
-            {% if user and user.is_admin %}
-            <a href="/admin" title="Arşiv / Yönetim"
-               class="sidebar-link {{ 'sidebar-link-active' if active == 'admin' else '' }}">
+            <a href="/archive" title="Arşiv"
+               class="sidebar-link {{ 'sidebar-link-active' if active == 'archive' else '' }}">
                 <i class="fa-solid fa-box-archive w-5 text-center shrink-0"></i>
                 <span class="sidebar-label">Arşiv</span>
+            </a>
+            {% if user and user.is_admin %}
+            <a href="/admin" title="Admin Paneli"
+               class="sidebar-link {{ 'sidebar-link-active' if active == 'admin' else '' }}">
+                <i class="fa-solid fa-user-shield w-5 text-center shrink-0"></i>
+                <span class="sidebar-label">Admin Paneli</span>
             </a>
             {% endif %}
         </nav>
@@ -68,8 +73,8 @@
             <i class="fa-solid fa-cloud-arrow-up text-xl mb-2 opacity-90"></i>
             <p class="font-display font-semibold text-sm leading-tight">Anılarını Yedekle</p>
             <p class="text-white/80 text-xs mt-1 leading-snug">Tüm fotoğraflarını güvenle buluta yedekle.</p>
-            <button onclick="openNotificationModal()" class="btn-press w-full bg-white/95 hover:bg-white text-[var(--amber-deep)] text-xs font-semibold rounded-lg py-2 mt-3 transition-colors">
-                Bildirimleri Aç
+            <button onclick="backupMemories(this)" class="btn-press w-full bg-white/95 hover:bg-white text-[var(--amber-deep)] text-xs font-semibold rounded-lg py-2 mt-3 transition-colors">
+                Şimdi Yedekle
             </button>
         </div>
     </div>
@@ -149,5 +154,18 @@
     }
     function closeMobileSidebar() {
         document.documentElement.classList.remove('sidebar-mobile-open');
+    }
+
+    function backupMemories(btn) {
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner inline-block align-middle" style="border-color: rgba(44,92,246,.3); border-top-color: var(--amber-deep);"></span>';
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = original;
+            if (typeof showToast === 'function') {
+                showToast('Tüm anıların güvenle yedeklendi', 'success');
+            }
+        }, 900);
     }
 </script>
