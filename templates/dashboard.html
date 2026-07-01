@@ -462,7 +462,7 @@
             }
             list.innerHTML = data.notifications.map(n => `
                 <a href="${n.url}" onclick="markNotificationRead('${n.id}')"
-                   class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-stone-50 transition-colors ${n.read ? '' : 'bg-amber-50/60'}">
+                   class="notif-item flex items-start gap-3 p-2.5 rounded-lg transition-colors ${n.read ? '' : 'notif-unread'}">
                     <span class="h-2 w-2 rounded-full mt-1.5 shrink-0 ${n.read ? 'bg-transparent' : 'bg-[var(--amber-deep)]'}"></span>
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold text-stone-800 leading-tight truncate">${n.title}</p>
