@@ -164,20 +164,6 @@
             background: var(--amber);
         }
 
-        .notif-toggle {
-            position: fixed; bottom: 68px; right: 18px; z-index: 90;
-            height: 42px; width: 42px; border-radius: 999px;
-            background: var(--surface); border: 1px solid var(--line);
-            box-shadow: 0 6px 16px -8px rgba(0,0,0,.25);
-            display: flex; align-items: center; justify-content: center;
-            color: var(--ink); cursor: pointer; transition: transform .15s ease, background-color .2s ease;
-        }
-        .notif-toggle:active { transform: scale(.94); }
-        .notif-dot {
-            position: absolute; top: 6px; right: 6px;
-            width: 8px; height: 8px; border-radius: 999px;
-            background: var(--moss); border: 1.5px solid var(--surface);
-        }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: .001ms !important;
@@ -192,13 +178,6 @@
     <button id="theme-toggle" class="theme-toggle" onclick="toggleTheme()" title="Görünümü değiştir">
         <i id="theme-toggle-icon" class="fa-solid fa-moon text-sm"></i>
     </button>
-
-    {% if nav_user %}
-    <button id="notif-toggle" class="notif-toggle" onclick="enableNotifications()" title="Etkinlik bildirimlerine izin ver (son 24 saat ve son 3 saatte haber verir)">
-        <i class="fa-solid fa-bell text-sm"></i>
-        <span id="notif-dot" class="notif-dot hidden"></span>
-    </button>
-    {% endif %}
 
     {% block content %}{% endblock %}
 
@@ -253,116 +232,6 @@
             }, 3200);
         }
     </script>
-
-    {% if nav_user %}
-    <script>
-        // ---------------------------------------------------------------
-        // Etkinlik yaklaşma bildirimleri (tarayıcı bildirimi)
-        // Zile tıklayıp izin veren herkese, son 24 saat ve son 3 saat
-        // kala otomatik bildirim gider. Sabit eşikler, ayar yok.
-        // ---------------------------------------------------------------
-        (function () {
-            const KEY_ENABLED = 'vault-notif-enabled';
-            const KEY_FIRED = 'vault-notif-fired';
-            const THRESHOLDS = [1440, 180]; // 24 saat, 3 saat (dakika cinsinden)
-            const POLL_MS = 20000;
-
-            function isEnabled() {
-                return localStorage.getItem(KEY_ENABLED) === 'true';
-            }
-            function getFired() {
-                try { return JSON.parse(localStorage.getItem(KEY_FIRED) || '{}'); }
-                catch (e) { return {}; }
-            }
-            function setFired(obj) {
-                try { localStorage.setItem(KEY_FIRED, JSON.stringify(obj)); } catch (e) {}
-            }
-            function fmtThreshold(min) {
-                if (min >= 1440 && min % 1440 === 0) return (min / 1440) + ' gün';
-                if (min >= 60 && min % 60 === 0) return (min / 60) + ' saat';
-                return min + ' dakika';
-            }
-            function updateDot() {
-                const dot = document.getElementById('notif-dot');
-                if (!dot) return;
-                const on = 'Notification' in window && Notification.permission === 'granted' && isEnabled();
-                dot.classList.toggle('hidden', !on);
-            }
-
-            window.enableNotifications = function () {
-                if (!('Notification' in window)) {
-                    showToast('Bu tarayıcı bildirimi desteklemiyor', 'error');
-                    return;
-                }
-                if (Notification.permission === 'granted' && isEnabled()) {
-                    showToast('Bildirimler zaten açık', 'info');
-                    return;
-                }
-                if (Notification.permission === 'denied') {
-                    showToast('Bildirim izni engellenmiş — tarayıcı site ayarlarından açabilirsin', 'error');
-                    return;
-                }
-                Notification.requestPermission().then(perm => {
-                    if (perm === 'granted') {
-                        localStorage.setItem(KEY_ENABLED, 'true');
-                        showToast('Bildirimler açıldı — son 24 saat ve son 3 saat kala haber verilecek', 'success');
-                        try { new Notification('Vault bildirimleri açık', { body: 'Etkinliğe son 24 saat ve son 3 saat kala haber vereceğiz.' }); } catch (e) {}
-                        checkEventNotifications();
-                    } else {
-                        showToast('Bildirim izni verilmedi', 'error');
-                    }
-                    updateDot();
-                });
-            };
-
-            async function checkEventNotifications() {
-                if (!isEnabled() || !('Notification' in window) || Notification.permission !== 'granted') return;
-                let events;
-                try {
-                    const res = await fetch('/api/events/upcoming');
-                    const data = await res.json();
-                    if (data.status !== 'success') return;
-                    events = data.events;
-                } catch (e) { return; }
-
-                const fired = getFired();
-                const activeIds = new Set(events.map(e => e.id));
-                Object.keys(fired).forEach(id => { if (!activeIds.has(id)) delete fired[id]; });
-
-                const now = Date.now();
-                events.forEach(ev => {
-                    const target = new Date(`${ev.date}T${ev.time || '00:00'}`).getTime();
-                    const minutesLeft = (target - now) / 60000;
-                    if (minutesLeft <= 0) return;
-                    if (!fired[ev.id]) fired[ev.id] = [];
-                    THRESHOLDS.forEach(th => {
-                        if (minutesLeft <= th && !fired[ev.id].includes(th)) {
-                            fired[ev.id].push(th);
-                            const body = ev.location
-                                ? `${ev.title} — ${fmtThreshold(th)} kaldı (${ev.location})`
-                                : `${ev.title} — ${fmtThreshold(th)} kaldı`;
-                            try {
-                                new Notification('Etkinlik yaklaşıyor', { body, tag: `vault-event-${ev.id}-${th}` });
-                            } catch (e) {}
-                            showToast(body, 'info');
-                        }
-                    });
-                });
-                setFired(fired);
-            }
-
-            document.addEventListener('DOMContentLoaded', () => {
-                updateDot();
-                if (isEnabled()) checkEventNotifications();
-                setInterval(checkEventNotifications, POLL_MS);
-                document.addEventListener('visibilitychange', () => {
-                    if (!document.hidden) checkEventNotifications();
-                });
-            });
-        })();
-    </script>
-    {% endif %}
-
     {% block scripts %}{% endblock %}
 </body>
 </html>
