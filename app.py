@@ -433,9 +433,70 @@ def index():
         return render_template('login.html', events=events)
 
     trips = load_trips()
-    trips_sorted = sorted(trips, key=trip_sort_key, reverse=True)
+    visible = [t for t in trips if user['username'] not in t.get('archived_by', [])]
+    trips_sorted = sorted(visible, key=trip_sort_key, reverse=True)
     return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
-                            events=events, all_events=load_events())
+                            events=events, all_events=load_events(), view='home')
+
+
+@app.route('/favorites')
+@login_required
+def favorites_page():
+    user = current_user()
+    trips = load_trips()
+    favs = [t for t in trips if user['username'] in t.get('favorited_by', [])]
+    trips_sorted = sorted(favs, key=trip_sort_key, reverse=True)
+    return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
+                            events=[], all_events=[], view='favorites')
+
+
+@app.route('/archive')
+@login_required
+def archive_page():
+    user = current_user()
+    trips = load_trips()
+    archived = [t for t in trips if user['username'] in t.get('archived_by', [])]
+    trips_sorted = sorted(archived, key=trip_sort_key, reverse=True)
+    return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
+                            events=[], all_events=[], view='archive')
+
+
+@app.route('/api/trips/<trip_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({'message': 'Albüm bulunamadı'}), 404
+    favorited_by = trip.setdefault('favorited_by', [])
+    if user['username'] in favorited_by:
+        favorited_by.remove(user['username'])
+        state = False
+    else:
+        favorited_by.append(user['username'])
+        state = True
+    save_trips(trips)
+    return jsonify({'favorited': state})
+
+
+@app.route('/api/trips/<trip_id>/archive', methods=['POST'])
+@login_required
+def toggle_archive(trip_id):
+    user = current_user()
+    trips = load_trips()
+    trip = find_trip(trips, trip_id)
+    if not trip:
+        return jsonify({'message': 'Albüm bulunamadı'}), 404
+    archived_by = trip.setdefault('archived_by', [])
+    if user['username'] in archived_by:
+        archived_by.remove(user['username'])
+        state = False
+    else:
+        archived_by.append(user['username'])
+        state = True
+    save_trips(trips)
+    return jsonify({'archived': state})
 
 
 @app.route('/feed')
