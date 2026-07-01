@@ -383,7 +383,7 @@ def upcoming_events():
 
 def public_users():
     users = load_users()
-    return {u: {"name": info["name"], "avatar_color": info["avatar_color"]} for u, info in users.items()}
+    return {u: {"name": info["name"], "avatar_color": info["avatar_color"], "is_admin": info.get("is_admin", False)} for u, info in users.items()}
 
 
 def current_user():
