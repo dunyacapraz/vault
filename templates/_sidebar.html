@@ -72,7 +72,7 @@
         <div class="bg-gradient-to-br from-[var(--amber)] to-[var(--amber-deep)] rounded-2xl p-4 text-white">
             <i class="fa-solid fa-cloud-arrow-up text-xl mb-2 opacity-90"></i>
             <p class="font-display font-semibold text-sm leading-tight">Anılarını Yedekle</p>
-            <p class="text-white/80 text-xs mt-1 leading-snug">Tüm fotoğraflarını güvenle buluta yedekle.</p>
+            <p class="text-white/80 text-xs mt-1 leading-snug">Tüm albümlerini klasör klasör bilgisayarına indir.</p>
             <button onclick="backupMemories(this)" class="btn-press w-full bg-white/95 hover:bg-white text-[var(--amber-deep)] text-xs font-semibold rounded-lg py-2 mt-3 transition-colors">
                 Şimdi Yedekle
             </button>
@@ -160,12 +160,32 @@
         const original = btn.textContent;
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner inline-block align-middle" style="border-color: rgba(44,92,246,.3); border-top-color: var(--amber-deep);"></span>';
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.textContent = original;
-            if (typeof showToast === 'function') {
-                showToast('Tüm anıların güvenle yedeklendi', 'success');
-            }
-        }, 900);
+        fetch('/api/backup/download')
+            .then(res => {
+                if (!res.ok) throw new Error('backup failed');
+                return res.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'vault-yedek.zip';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                if (typeof showToast === 'function') {
+                    showToast('Yedek indiriliyor', 'success');
+                }
+            })
+            .catch(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Yedekleme başarısız oldu', 'error');
+                }
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = original;
+            });
     }
 </script>
