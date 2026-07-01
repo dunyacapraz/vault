@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Vault | Hesap Ayarları{% endblock %}
 {% block content %}
-<div class="min-h-screen">
+<script>document.body.classList.add('has-topbar');</script>
+{% set active = 'home' %}
+<div class="app-shell">
+    {% include "_sidebar.html" %}
+    <div class="app-main min-h-screen">
     <header class="bg-white/90 backdrop-blur-sm sticky top-0 z-20 px-5 sm:px-8 py-5 border-b border-[var(--line)] anim-fade">
         <div class="max-w-xl mx-auto flex items-center gap-3">
+            <button onclick="toggleSidebar()" class="btn-press h-10 w-10 rounded-lg flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors shrink-0" title="Menüyü aç/kapat"><i class="fa-solid fa-bars"></i></button>
             <a href="/" class="btn-press h-10 w-10 rounded-lg flex items-center justify-center text-stone-500 hover:bg-stone-100 hover:text-stone-800 transition-colors shrink-0">
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
@@ -60,6 +65,7 @@
             </div>
         </div>
     </main>
+    </div>
 </div>
 {% endblock %}
 
