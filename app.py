@@ -572,6 +572,18 @@ def index():
                             events=events, all_events=load_events(), view='home', on_this_day=on_this_day)
 
 
+@app.route('/events')
+@login_required
+def events_page():
+    user = current_user()
+    events = load_events()
+    now = datetime.now()
+    with_dt = [(e, event_datetime(e)) for e in events]
+    upcoming = sorted([e for e, dt in with_dt if dt and dt >= now], key=lambda e: event_datetime(e))
+    past = sorted([e for e, dt in with_dt if dt and dt < now], key=lambda e: event_datetime(e), reverse=True)
+    return render_template('events.html', user=user, upcoming=upcoming, past=past, users=public_users())
+
+
 @app.route('/favorites')
 @login_required
 def favorites_page():
