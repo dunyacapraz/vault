@@ -28,8 +28,9 @@
             <a href="/feed" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Keşfet">
                 <i class="fa-solid fa-compass"></i>
             </a>
-            <button id="push-toggle-btn" onclick="openNotificationModal()" class="btn-press text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Bildirim Ayarları">
+            <button id="push-toggle-btn" onclick="openNotificationModal()" class="btn-press relative text-stone-500 hover:text-[var(--amber-deep)] hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Bildirimler">
                 <i id="push-toggle-icon" class="fa-regular fa-bell"></i>
+                <span id="notif-unread-badge" class="hidden absolute -top-0.5 -right-0.5 h-4 min-w-[16px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold leading-4 text-center">0</span>
             </button>
             <a href="/account" class="btn-press text-stone-500 hover:text-stone-800 hover:bg-stone-100 h-9 w-9 rounded-lg flex items-center justify-center transition-colors" title="Hesap Ayarları">
                 <i class="fa-solid fa-gear"></i>
@@ -172,21 +173,45 @@
 
 <!-- Yeni Etkinlik Modalı -->
 <div id="notif-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center px-4">
-    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-sm p-7">
-        <div class="flex items-center justify-between mb-5">
-            <h3 class="font-display text-xl font-semibold">Bildirim Ayarları</h3>
+    <div class="anim-scale bg-white rounded-2xl shadow-md w-full max-w-sm p-7 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between mb-4 shrink-0">
+            <h3 class="font-display text-xl font-semibold">Bildirimler</h3>
             <button onclick="closeNotificationModal()" class="text-stone-400 hover:text-stone-700 h-8 w-8 flex items-center justify-center rounded-lg hover:bg-stone-100">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-        <div class="space-y-5">
+
+        <div class="flex items-center gap-1 bg-stone-100 rounded-lg p-1 mb-4 shrink-0">
+            <button id="notif-tab-history-btn" onclick="switchNotifTab('history')"
+                    class="flex-1 text-sm font-medium py-1.5 rounded-md transition-colors bg-white shadow-sm text-stone-800">
+                Geçmiş
+            </button>
+            <button id="notif-tab-settings-btn" onclick="switchNotifTab('settings')"
+                    class="flex-1 text-sm font-medium py-1.5 rounded-md transition-colors text-stone-500">
+                Ayarlar
+            </button>
+        </div>
+
+        <!-- Geçmiş sekmesi -->
+        <div id="notif-tab-history" class="flex-1 min-h-0 flex flex-col">
+            <div class="flex items-center justify-between mb-2 shrink-0">
+                <p class="text-xs text-stone-400">Son bildirimler</p>
+                <button onclick="markAllNotificationsRead()" class="text-xs text-[var(--amber-deep)] hover:underline font-medium">Tümünü okundu işaretle</button>
+            </div>
+            <div id="notif-history-list" class="flex-1 overflow-y-auto space-y-1.5 -mx-2 px-2">
+                <p class="text-center text-sm text-stone-400 py-8">Yükleniyor...</p>
+            </div>
+        </div>
+
+        <!-- Ayarlar sekmesi -->
+        <div id="notif-tab-settings" class="hidden space-y-5">
             <div class="flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-xl bg-stone-100 flex items-center justify-center shrink-0">
                         <i id="notif-modal-icon" class="fa-regular fa-bell text-stone-500"></i>
                     </div>
                     <div>
-                        <p class="font-semibold text-sm leading-tight">Bildirimler</p>
+                        <p class="font-semibold text-sm leading-tight">Bu cihazda bildirimler</p>
                         <p id="notif-modal-status" class="text-xs text-stone-500 mt-0.5">Kontrol ediliyor...</p>
                     </div>
                 </div>
@@ -197,7 +222,7 @@
                 </button>
             </div>
             <p class="text-xs text-stone-400 leading-relaxed">
-                Açık olduğunda yeni anılar, albümler, etkinlikler, yorumlar ve beğeniler için bu cihaza bildirim gönderilir.
+                Açık olduğunda yeni anılar, albümler, etkinlikler, yorumlar ve beğeniler için bu cihaza anlık bildirim gönderilir. Kapalı olsa bile bildirimler "Geçmiş" sekmesinde birikmeye devam eder.
             </p>
             <div id="notif-modal-denied-hint" class="hidden bg-amber-50 text-amber-800 p-3 rounded-lg text-xs border border-amber-200">
                 Bildirimlere izin verilmemiş görünüyor. iPhone'da Ayarlar &gt; Bildirimler &gt; Vault yolundan elle açman gerekiyor.
@@ -376,6 +401,7 @@
 
     function openNotificationModal() {
         document.getElementById('notif-modal').classList.remove('hidden');
+        switchNotifTab('history');
         refreshNotifModal();
     }
     function closeNotificationModal() {
@@ -385,7 +411,107 @@
         if (e.target.id === 'notif-modal') closeNotificationModal();
     });
 
+    function switchNotifTab(tab) {
+        const histTab = document.getElementById('notif-tab-history');
+        const setTab = document.getElementById('notif-tab-settings');
+        const histBtn = document.getElementById('notif-tab-history-btn');
+        const setBtn = document.getElementById('notif-tab-settings-btn');
+        if (tab === 'history') {
+            histTab.classList.remove('hidden');
+            setTab.classList.add('hidden');
+            histBtn.classList.add('bg-white', 'shadow-sm', 'text-stone-800');
+            histBtn.classList.remove('text-stone-500');
+            setBtn.classList.remove('bg-white', 'shadow-sm', 'text-stone-800');
+            setBtn.classList.add('text-stone-500');
+            loadNotificationHistory();
+        } else {
+            setTab.classList.remove('hidden');
+            histTab.classList.add('hidden');
+            setBtn.classList.add('bg-white', 'shadow-sm', 'text-stone-800');
+            setBtn.classList.remove('text-stone-500');
+            histBtn.classList.remove('bg-white', 'shadow-sm', 'text-stone-800');
+            histBtn.classList.add('text-stone-500');
+        }
+    }
+
+    function notifRelativeTime(iso) {
+        const diffMs = Date.now() - new Date(iso + 'Z').getTime();
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return 'az önce';
+        if (mins < 60) return `${mins} dk önce`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs} sa önce`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days} gün önce`;
+        return new Date(iso + 'Z').toLocaleDateString('tr-TR');
+    }
+
+    async function loadNotificationHistory() {
+        const list = document.getElementById('notif-history-list');
+        try {
+            const res = await fetch('/api/notifications');
+            const data = await res.json();
+            if (!res.ok) {
+                list.innerHTML = '<p class="text-center text-sm text-stone-400 py-8">Bildirimler yüklenemedi</p>';
+                return;
+            }
+            updateUnreadBadge(data.unread_count);
+            if (!data.notifications.length) {
+                list.innerHTML = '<p class="text-center text-sm text-stone-400 py-8">Henüz bildirim yok.</p>';
+                return;
+            }
+            list.innerHTML = data.notifications.map(n => `
+                <a href="${n.url}" onclick="markNotificationRead('${n.id}')"
+                   class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-stone-50 transition-colors ${n.read ? '' : 'bg-amber-50/60'}">
+                    <span class="h-2 w-2 rounded-full mt-1.5 shrink-0 ${n.read ? 'bg-transparent' : 'bg-[var(--amber-deep)]'}"></span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-stone-800 leading-tight truncate">${n.title}</p>
+                        <p class="text-xs text-stone-500 mt-0.5 line-clamp-2">${n.body}</p>
+                        <p class="text-[11px] text-stone-400 mt-1">${notifRelativeTime(n.created_at)}</p>
+                    </div>
+                </a>
+            `).join('');
+        } catch (err) {
+            list.innerHTML = '<p class="text-center text-sm text-stone-400 py-8">Bağlantı hatası</p>';
+        }
+    }
+
+    async function markNotificationRead(notifId) {
+        try {
+            await fetch(`/api/notifications/${notifId}/read`, { method: 'POST' });
+            refreshUnreadBadge();
+        } catch (err) {}
+    }
+
+    async function markAllNotificationsRead() {
+        try {
+            await fetch('/api/notifications/read-all', { method: 'POST' });
+            await loadNotificationHistory();
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    function updateUnreadBadge(count) {
+        const badge = document.getElementById('notif-unread-badge');
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+
+    async function refreshUnreadBadge() {
+        try {
+            const res = await fetch('/api/notifications');
+            const data = await res.json();
+            if (res.ok) updateUnreadBadge(data.unread_count);
+        } catch (err) {}
+    }
+
     refreshPushToggleIcon();
+    refreshUnreadBadge();
 
     async function logout() {
         try {
