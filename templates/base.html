@@ -75,6 +75,12 @@
             box-shadow: 0 8px 20px -10px rgba(0,0,0,.5) !important;
         }
 
+        /* Bildirim geçmişi: okunmamış satır vurgusu (açık/koyu temaya uyumlu) */
+        .notif-unread { background-color: rgba(44, 92, 246, 0.08); }
+        html.dark .notif-unread { background-color: rgba(91, 130, 255, 0.14); }
+        .notif-item:hover { background-color: rgba(0, 0, 0, 0.035); }
+        html.dark .notif-item:hover { background-color: rgba(255, 255, 255, 0.06); }
+
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: #d4d4d3; border-radius: 999px; }
         ::-webkit-scrollbar-track { background: transparent; }
