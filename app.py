@@ -481,6 +481,40 @@ def public_users():
     return {u: {"name": info["name"], "avatar_color": info["avatar_color"], "is_admin": info.get("is_admin", False)} for u, info in users.items()}
 
 
+def _memory_effective_date(media_item):
+    """Bir anının 'gerçek' tarihi: kullanıcı özel bir tarih girdiyse o, yoksa
+    yükleme tarihi kullanılır."""
+    raw = media_item.get('memory_date') or media_item.get('uploaded_at')
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw[:10]).date()
+    except (ValueError, TypeError):
+        return None
+
+
+def on_this_day_memories(trips, limit=12):
+    """Bugünle aynı ay/günde, geçmiş yıllarda eklenmiş anıları toplar
+    ('X yıl önce bugün' bölümü için)."""
+    today = datetime.now().date()
+    results = []
+    for trip in trips:
+        for item in trip.get('media', []):
+            d = _memory_effective_date(item)
+            if not d or d.year >= today.year:
+                continue
+            if d.month == today.month and d.day == today.day:
+                results.append({
+                    "trip_id": trip['id'],
+                    "trip_title": trip.get('title', ''),
+                    "media": item,
+                    "years_ago": today.year - d.year,
+                    "date": d,
+                })
+    results.sort(key=lambda r: r['years_ago'])
+    return results[:limit]
+
+
 def current_user():
     username = session.get('username')
     if not username:
@@ -533,8 +567,9 @@ def index():
     trips = load_trips()
     visible = [t for t in trips if user['username'] not in t.get('archived_by', [])]
     trips_sorted = sorted(visible, key=trip_sort_key, reverse=True)
+    on_this_day = on_this_day_memories(visible)
     return render_template('dashboard.html', user=user, trips=trips_sorted, users=public_users(),
-                            events=events, all_events=load_events(), view='home')
+                            events=events, all_events=load_events(), view='home', on_this_day=on_this_day)
 
 
 @app.route('/favorites')
