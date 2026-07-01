@@ -27,6 +27,16 @@ load_dotenv()  # .env dosyasındaki değişkenleri oku
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'vault_secure_key_2026_change_me')
 
+
+@app.after_request
+def add_sw_scope_header(response):
+    # sw.js /static/ altından servis edildiği için tarayıcı varsayılan olarak
+    # scope'unu /static/ ile sınırlar. Tüm siteyi (scope: '/') kontrol
+    # edebilmesi için bu header gerekiyor.
+    if request.path == '/static/sw.js':
+        response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
 BASE_DIR = os.path.dirname(__file__)
 META_TRIPS_KEY = "_meta/trips.json"
 META_EVENTS_KEY = "_meta/events.json"
