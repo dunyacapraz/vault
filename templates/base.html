@@ -94,6 +94,10 @@
             color: var(--ink); cursor: pointer; transition: transform .15s ease, background-color .2s ease;
         }
         .theme-toggle:active { transform: scale(.94); }
+        body.has-topbar .theme-toggle { display: none; }
+        @media (min-width: 1024px) {
+            html.sidebar-mobile-open body { overflow: hidden; }
+        }
 
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(8px); }
@@ -208,9 +212,12 @@
 
     <script>
         function setThemeIcon() {
-            const icon = document.getElementById('theme-toggle-icon');
             const isDark = document.documentElement.classList.contains('dark');
-            icon.className = isDark ? 'fa-solid fa-sun text-sm' : 'fa-solid fa-moon text-sm';
+            const cls = isDark ? 'fa-solid fa-sun text-sm' : 'fa-solid fa-moon text-sm';
+            const icon = document.getElementById('theme-toggle-icon');
+            if (icon) icon.className = cls;
+            const topbarIcon = document.getElementById('topbar-theme-icon');
+            if (topbarIcon) topbarIcon.className = cls;
         }
         function toggleTheme() {
             const html = document.documentElement;
