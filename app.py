@@ -2,6 +2,9 @@ import os
 import json
 import uuid
 import random
+import zipfile
+import tempfile
+import re
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -18,7 +21,7 @@ except ImportError:
 
 from flask import (
     Flask, render_template, request, session, jsonify,
-    abort, Response, stream_with_context, redirect, url_for
+    abort, Response, stream_with_context, redirect, url_for, send_file
 )
 from werkzeug.utils import secure_filename
 
@@ -1425,6 +1428,88 @@ def mark_all_notifications_read():
     if changed:
         save_notifications(notifs)
     return jsonify({"status": "success"})
+
+
+# ---------------------------------------------------------------------------
+# Yedekleme — tüm albümleri klasör klasör içeren bir .zip olarak indirir.
+# ---------------------------------------------------------------------------
+def safe_folder_name(name, fallback):
+    name = (name or '').strip()
+    if not name:
+        name = fallback
+    name = re.sub(r'[\\/:*?"<>|]+', '-', name)
+    name = re.sub(r'\s+', ' ', name).strip(' .')
+    return name or fallback
+
+
+@app.route('/api/backup/download')
+@login_required
+def backup_download():
+    trips = load_trips()
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    tmp_path = tmp.name
+    tmp.close()
+
+    used_names = {}
+    try:
+        with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for trip in trips:
+                folder = safe_folder_name(trip.get('title'), trip['id'])
+                # aynı isimli iki albüm varsa klasörleri ayırt et
+                count = used_names.get(folder, 0)
+                used_names[folder] = count + 1
+                if count:
+                    folder = f"{folder} ({count + 1})"
+
+                media_list = trip.get('media', [])
+                if not media_list:
+                    zf.writestr(f"{folder}/.klasor", "")
+                    continue
+
+                used_filenames = {}
+                for m in media_list:
+                    filename = m.get('filename')
+                    if not filename:
+                        continue
+                    try:
+                        obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=r2_key(trip['id'], filename))
+                        data = obj['Body'].read()
+                    except ClientError:
+                        continue
+
+                    out_name = m.get('original_name') or filename
+                    out_name = safe_folder_name(out_name, filename)
+                    dupe = used_filenames.get(out_name, 0)
+                    used_filenames[out_name] = dupe + 1
+                    if dupe:
+                        base, ext = os.path.splitext(out_name)
+                        out_name = f"{base} ({dupe + 1}){ext}"
+
+                    zf.writestr(f"{folder}/{out_name}", data)
+
+        today = datetime.now().strftime('%Y-%m-%d')
+        response = send_file(
+            tmp_path,
+            as_attachment=True,
+            download_name=f"vault-yedek-{today}.zip",
+            mimetype='application/zip',
+        )
+
+        @response.call_on_close
+        def _cleanup():
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+        return response
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 # ---------------------------------------------------------------------------
