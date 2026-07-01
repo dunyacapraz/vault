@@ -303,7 +303,7 @@
                 return true;
             } catch (err) {
                 console.error('Push subscribe error:', err);
-                showToast('Bildirimler açılamadı', 'error');
+                showToast('Bildirim hatası: ' + (err.name || '') + ' - ' + (err.message || err), 'error');
                 return false;
             }
         }
