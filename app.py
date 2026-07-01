@@ -1329,7 +1329,61 @@ def delete_event(event_id):
 
     events.remove(event)
     save_events(events)
+    if event.get('image'):
+        try:
+            s3.delete_object(Bucket=R2_BUCKET_NAME, Key=f"events/{event_id}/{event['image']}")
+        except ClientError:
+            pass
     return jsonify({"status": "success"})
+
+
+@app.route('/api/events/<event_id>/image', methods=['POST'])
+@login_required
+def upload_event_image(event_id):
+    user = current_user()
+    events = load_events()
+    event = next((e for e in events if e['id'] == event_id), None)
+    if not event:
+        return jsonify({"status": "error", "message": "Etkinlik bulunamadı"}), 404
+
+    if event['created_by'] != user['username'] and not user.get('is_admin'):
+        return jsonify({"status": "error", "message": "Sadece etkinliği ekleyen kişi görsel ekleyebilir"}), 403
+
+    file = request.files.get('image')
+    if not file or not file.filename or not allowed_file(file.filename):
+        return jsonify({"status": "error", "message": "Geçerli bir görsel seç"}), 400
+
+    old_image = event.get('image')
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    filename = f"{uuid.uuid4().hex[:10]}.{ext}"
+    s3.upload_fileobj(
+        file, R2_BUCKET_NAME, f"events/{event_id}/{filename}",
+        ExtraArgs={'ContentType': file.content_type or 'application/octet-stream'},
+    )
+    if old_image:
+        try:
+            s3.delete_object(Bucket=R2_BUCKET_NAME, Key=f"events/{event_id}/{old_image}")
+        except ClientError:
+            pass
+
+    event['image'] = filename
+    save_events(events)
+    return jsonify({"status": "success", "image": filename})
+
+
+@app.route('/event-uploads/<event_id>/<filename>')
+@login_required
+def serve_event_image(event_id, filename):
+    try:
+        obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=f"events/{event_id}/{filename}")
+    except ClientError:
+        abort(404)
+
+    content_type = obj.get('ContentType', 'application/octet-stream')
+    return Response(
+        stream_with_context(obj['Body'].iter_chunks(chunk_size=65536)),
+        mimetype=content_type,
+    )
 
 
 # ---------------------------------------------------------------------------
