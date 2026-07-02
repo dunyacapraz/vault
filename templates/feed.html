@@ -95,34 +95,42 @@
                     <p class="text-sm text-stone-700 mt-2"><span class="font-semibold">{{ users.get(post.posted_by, {}).get('name', post.posted_by) }}</span> {{ post.caption }}</p>
                     {% endif %}
 
-                    <div class="feed-comments-section hidden mt-3 pt-3 border-t border-[var(--line)]">
-                        <div class="feed-comments-list space-y-2 mb-3 max-h-52 overflow-y-auto">
-                            {% for c in post.get('comments', []) %}
-                            <div class="flex items-start gap-2" data-comment-id="{{ c.id }}">
-                                <span class="h-6 w-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                      style="background-color: {{ users.get(c.username, {}).get('avatar_color', '#999') }}">
-                                    {{ users.get(c.username, {}).get('name', c.username)[0] }}
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm text-stone-800"><span class="font-semibold">{{ users.get(c.username, {}).get('name', c.username) }}</span> <span class="text-stone-600">{{ c.text }}</span></p>
+                    <div class="feed-comments-section comments-collapse mt-1">
+                        <div>
+                            <div class="pt-3 border-t border-[var(--line)]">
+                                <div class="feed-comments-list space-y-2.5 mb-3 max-h-52 overflow-y-auto pr-1">
+                                    {% for c in post.get('comments', []) %}
+                                    <div class="flex items-start gap-2" data-comment-id="{{ c.id }}">
+                                        <span class="h-7 w-7 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                              style="background-color: {{ users.get(c.username, {}).get('avatar_color', '#999') }}">
+                                            {{ users.get(c.username, {}).get('name', c.username)[0] }}
+                                        </span>
+                                        <div class="flex-1 min-w-0 bg-stone-100 rounded-2xl rounded-tl-sm px-3 py-2">
+                                            <div class="flex items-baseline justify-between gap-2">
+                                                <p class="text-sm font-semibold leading-tight">{{ users.get(c.username, {}).get('name', c.username) }}</p>
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <span class="text-[10px] text-stone-400" data-comment-time="{{ c.created_at }}"></span>
+                                                    {% if c.username == user.username or post.posted_by == user.username or user.is_admin %}
+                                                    <button onclick="deleteFeedComment('{{ post.id }}', '{{ c.id }}')" class="text-stone-300 hover:text-red-500"><i class="fa-regular fa-trash-can text-xs"></i></button>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <p class="text-sm text-stone-700 mt-0.5 break-words">{{ c.text }}</p>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <p class="feed-no-comments text-xs text-stone-400 text-center py-2">Henüz yorum yok, ilk yorumu sen yaz!</p>
+                                    {% endfor %}
                                 </div>
-                                {% if c.username == user.username or post.posted_by == user.username or user.is_admin %}
-                                <button onclick="deleteFeedComment('{{ post.id }}', '{{ c.id }}')" class="text-stone-300 hover:text-red-500 shrink-0 mt-0.5">
-                                    <i class="fa-regular fa-trash-can text-xs"></i>
-                                </button>
-                                {% endif %}
+                                <div class="flex items-center gap-2">
+                                    <input type="text" class="feed-comment-input flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none text-sm"
+                                           placeholder="Yorum yaz..." maxlength="500"
+                                           onkeydown="if(event.key==='Enter'){submitFeedComment('{{ post.id }}')}">
+                                    <button onclick="submitFeedComment('{{ post.id }}')" class="feed-comment-send btn-press fab-amber text-white h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-paper-plane text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
-                            {% else %}
-                            <p class="feed-no-comments text-xs text-stone-400">Henüz yorum yok.</p>
-                            {% endfor %}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <input type="text" class="feed-comment-input flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none text-sm"
-                                   placeholder="Yorum yaz..." maxlength="500"
-                                   onkeydown="if(event.key==='Enter'){submitFeedComment('{{ post.id }}')}">
-                            <button onclick="submitFeedComment('{{ post.id }}')" class="btn-press fab-amber text-white h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
-                                <i class="fa-solid fa-paper-plane text-sm"></i>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -228,6 +236,11 @@
             if (res.ok) {
                 icon.classList.toggle('text-red-500', data.liked);
                 countEl.textContent = data.like_count;
+                if (data.liked) {
+                    icon.classList.remove('like-pop');
+                    void icon.offsetWidth;
+                    icon.classList.add('like-pop');
+                }
             } else {
                 showToast(data.message || 'Bir hata oluştu', 'error');
             }
@@ -245,10 +258,16 @@
     function toggleFeedComments(postId) {
         const card = document.querySelector(`[data-post-id="${postId}"]`);
         const section = card.querySelector('.feed-comments-section');
-        section.classList.toggle('hidden');
-        if (!section.classList.contains('hidden')) {
-            const input = section.querySelector('.feed-comment-input');
-            input.focus();
+        const wasExpanded = section.classList.contains('expanded');
+        section.classList.toggle('expanded');
+        if (!wasExpanded) {
+            updateCommentTimes(section);
+            setTimeout(() => {
+                const input = section.querySelector('.feed-comment-input');
+                if (input) input.focus();
+                const list = section.querySelector('.feed-comments-list');
+                if (list) list.scrollTop = list.scrollHeight;
+            }, 180);
         }
     }
 
@@ -256,20 +275,28 @@
         const u = USERS_MAP[c.username] || {};
         const canDel = c.username === CURRENT_USER;
         return `
-            <div class="flex items-start gap-2" data-comment-id="${c.id}">
-                <span class="h-6 w-6 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0" style="background-color:${u.avatar_color || '#999'}">${(u.name || c.username)[0]}</span>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm text-stone-800"><span class="font-semibold">${escapeHtml(u.name || c.username)}</span> <span class="text-stone-600">${escapeHtml(c.text)}</span></p>
+            <div class="flex items-start gap-2 comment-pop" data-comment-id="${c.id}">
+                <span class="h-7 w-7 rounded-full inline-flex items-center justify-center text-white text-[10px] font-bold shrink-0" style="background-color:${u.avatar_color || '#999'}">${(u.name || c.username)[0]}</span>
+                <div class="flex-1 min-w-0 bg-stone-100 rounded-2xl rounded-tl-sm px-3 py-2">
+                    <div class="flex items-baseline justify-between gap-2">
+                        <p class="text-sm font-semibold leading-tight">${escapeHtml(u.name || c.username)}</p>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-[10px] text-stone-400" data-comment-time="${c.created_at}">şimdi</span>
+                            ${canDel ? `<button onclick="deleteFeedComment('${c.postId}', '${c.id}')" class="text-stone-300 hover:text-red-500"><i class="fa-regular fa-trash-can text-xs"></i></button>` : ''}
+                        </div>
+                    </div>
+                    <p class="text-sm text-stone-700 mt-0.5 break-words">${escapeHtml(c.text)}</p>
                 </div>
-                ${canDel ? `<button onclick="deleteFeedComment('${c.postId}', '${c.id}')" class="text-stone-300 hover:text-red-500 shrink-0 mt-0.5"><i class="fa-regular fa-trash-can text-xs"></i></button>` : ''}
             </div>`;
     }
 
     async function submitFeedComment(postId) {
         const card = document.querySelector(`[data-post-id="${postId}"]`);
         const input = card.querySelector('.feed-comment-input');
+        const sendBtn = card.querySelector('.feed-comment-send');
         const text = input.value.trim();
         if (!text) return;
+        if (sendBtn) sendBtn.disabled = true;
         try {
             const res = await fetch(`/api/feed/${postId}/comments`, {
                 method: 'POST',
@@ -281,10 +308,13 @@
                 input.value = '';
                 const list = card.querySelector('.feed-comments-list');
                 const noComments = list.querySelector('.feed-no-comments');
-                if (noComments) noComments.remove();
+                if (noComments) {
+                    noComments.classList.add('comment-leaving');
+                    setTimeout(() => noComments.remove(), 200);
+                }
                 data.comment.postId = postId;
                 list.insertAdjacentHTML('beforeend', renderFeedComment(data.comment));
-                list.scrollTop = list.scrollHeight;
+                list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
                 const countEl = card.querySelector('.feed-comment-count');
                 countEl.textContent = parseInt(countEl.textContent, 10) + 1;
             } else {
@@ -292,6 +322,8 @@
             }
         } catch (err) {
             showToast('Bağlantı hatası', 'error');
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
         }
     }
 
@@ -301,7 +333,10 @@
             const data = await res.json();
             if (res.ok) {
                 const el = document.querySelector(`[data-comment-id="${commentId}"]`);
-                if (el) el.remove();
+                if (el) {
+                    el.classList.add('comment-leaving');
+                    setTimeout(() => el.remove(), 200);
+                }
                 const card = document.querySelector(`[data-post-id="${postId}"]`);
                 const countEl = card.querySelector('.feed-comment-count');
                 countEl.textContent = Math.max(0, parseInt(countEl.textContent, 10) - 1);
@@ -345,5 +380,25 @@
     document.querySelectorAll('[data-time]').forEach(el => {
         el.textContent = relativeTime(el.getAttribute('data-time'));
     });
+
+    // Yorumlar için kısa göreli zaman (örn. "2dk", "3sa", "1g")
+    function relativeTimeShort(iso) {
+        const diffMs = Date.now() - new Date(iso + 'Z').getTime();
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) return 'şimdi';
+        if (mins < 60) return `${mins}dk`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}sa`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days}g`;
+        return new Date(iso + 'Z').toLocaleDateString('tr-TR');
+    }
+    function updateCommentTimes(scope) {
+        (scope || document).querySelectorAll('[data-comment-time]').forEach(el => {
+            el.textContent = relativeTimeShort(el.getAttribute('data-comment-time'));
+        });
+    }
+    updateCommentTimes();
+    setInterval(() => updateCommentTimes(), 30000);
 </script>
 {% endblock %}
