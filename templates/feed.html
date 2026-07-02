@@ -29,11 +29,12 @@
         <!-- Yükleme öncesi önizleme / açıklama kutusu -->
         <div id="feed-compose" class="hidden anim-fade-up mb-6 bg-white rounded-2xl shadow-sm border border-[var(--line)] p-4">
             <div class="rounded-xl overflow-hidden bg-stone-100 mb-3 max-h-72 flex items-center justify-center">
-                <img id="feed-compose-preview-img" class="w-full h-full object-cover hidden" alt="">
-                <video id="feed-compose-preview-video" class="w-full h-full object-cover hidden" muted controls></video>
+                <img id="feed-compose-preview-img" class="max-w-full max-h-72 object-contain hidden" alt="">
+                <video id="feed-compose-preview-video" class="max-w-full max-h-72 object-contain hidden" muted controls></video>
             </div>
             <textarea id="feed-compose-caption" rows="2" maxlength="300" placeholder="Bir şey yaz... (isteğe bağlı)"
                 class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none resize-none text-sm"></textarea>
+            <p class="text-[11px] text-stone-400 mt-1.5">Fotoğraf (en fazla 10MB) veya video (en fazla 50MB, büyükse otomatik küçültülür) paylaşabilirsin.</p>
             <div id="feed-upload-progress" class="hidden mt-3">
                 <div class="h-1.5 bg-stone-200 rounded-full overflow-hidden">
                     <div id="feed-upload-bar" class="h-full fab-amber transition-all duration-300" style="width:0%"></div>
@@ -72,11 +73,11 @@
                     </button>
                     {% endif %}
                 </div>
-                <div class="bg-stone-100 aspect-square">
+                <div class="bg-stone-100 flex items-center justify-center max-h-[34rem] overflow-hidden">
                     {% if post.type == 'video' %}
-                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-full object-cover object-top" controls></video>
+                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-auto max-h-[34rem] object-contain" controls></video>
                     {% else %}
-                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-full object-cover object-top" loading="lazy">
+                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-auto max-h-[34rem] object-contain" loading="lazy">
                     {% endif %}
                 </div>
                 <div class="px-4 py-3">
