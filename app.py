@@ -356,6 +356,22 @@ def find_feed_post(posts, post_id):
     return post
 
 
+def notification_preview(text, max_len=90):
+    """Bildirimlerde gösterilecek metni tek satıra indirger: satır başındaki
+    '*', '-', '•' gibi madde işaretlerini kaldırır, satırları ' · ' ile
+    birleştirir ve gerekirse '...' ile kısaltır. Böylece çok satırlı
+    listeler bildirimde çirkin görünmez."""
+    if not text:
+        return ""
+    lines = [ln.strip().lstrip('*-•').strip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+    cleaned = ' · '.join(lines)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len - 1].rstrip() + '…'
+    return cleaned
+
+
 def send_push_notification(payload, exclude_username=None, only_username=None):
     """Tüm üyelere (isteğe bağlı biri hariç) ya da tek bir kullanıcıya (only_username)
     push bildirimi gönderir. Push ayarlanmamışsa veya hata olursa sessizce geçer —
@@ -1376,7 +1392,7 @@ def add_comment(trip_id, filename):
     save_trips(trips)
 
     try:
-        preview = text if len(text) <= 80 else text[:77] + '...'
+        preview = notification_preview(text, max_len=80)
         notify(
             {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": f"/trip/{trip_id}", "tag": f"comment-{trip_id}-{filename}"},
             exclude_username=user['username'],
@@ -1449,7 +1465,7 @@ def feed_upload():
 
         try:
             notify(
-                {"title": "✨ Yeni paylaşım", "body": f"{user['name']}: \"{caption}\"", "url": "/feed", "tag": f"feed-{post_id}"},
+                {"title": "✨ Yeni paylaşım", "body": f"{user['name']}: {notification_preview(caption)}", "url": "/feed", "tag": f"feed-{post_id}"},
                 exclude_username=user['username'],
             )
         except Exception as e:
@@ -1538,11 +1554,12 @@ def feed_upload():
     save_feed(posts)
 
     try:
-        body = f"{user['name']} bir şey paylaştı" + (f": \"{caption}\"" if caption else "")
-        notify(
-            {"title": "✨ Yeni paylaşım", "body": body, "url": "/feed", "tag": f"feed-{post_id}"},
-            exclude_username=user['username'],
-        )
+        preview = notification_preview(caption)
+        body = f"{user['name']} bir şey paylaştı" + (f": {preview}" if preview else "")
+        push_payload = {"title": "✨ Yeni paylaşım", "body": body, "url": "/feed", "tag": f"feed-{post_id}"}
+        if post['type'] == 'image':
+            push_payload["image"] = f"/uploads/{post_id}/{unique_name}"
+        notify(push_payload, exclude_username=user['username'])
     except Exception as e:
         print(f"[PUSH GÖNDERİM HATASI] {e}")
 
@@ -1629,7 +1646,7 @@ def feed_add_comment(post_id):
 
     if post.get('posted_by') and post['posted_by'] != user['username']:
         try:
-            preview = text if len(text) <= 80 else text[:77] + '...'
+            preview = notification_preview(text, max_len=80)
             notify(
                 {"title": "💬 Yeni yorum", "body": f"{user['name']}: {preview}", "url": "/feed", "tag": f"feed-comment-{post_id}"},
                 exclude_username=user['username'],
