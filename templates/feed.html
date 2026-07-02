@@ -19,9 +19,9 @@
         </div>
     </header>
 
-    <main class="px-4 sm:px-8 py-6 max-w-lg mx-auto">
+    <main class="px-4 sm:px-8 py-6 max-w-lg lg:max-w-5xl mx-auto">
         <!-- Her zaman açık paylaşım kutusu: yazı ve/veya fotoğraf/video -->
-        <div id="feed-compose" class="anim-fade-up mb-6 bg-white rounded-2xl shadow-sm border border-[var(--line)] p-4">
+        <div id="feed-compose" class="anim-fade-up mb-6 max-w-lg mx-auto bg-white rounded-2xl shadow-sm border border-[var(--line)] p-4">
             <div id="feed-compose-media-wrap" class="hidden relative rounded-xl overflow-hidden bg-stone-100 mb-3 max-h-72 items-center justify-center">
                 <button onclick="removeFeedMedia()" type="button"
                         class="btn-press absolute top-2 right-2 h-7 w-7 rounded-full bg-black/50 text-white flex items-center justify-center text-xs z-10">
@@ -50,15 +50,15 @@
         </div>
 
         {% if not posts %}
-        <div class="anim-fade-up text-center py-20 border-2 border-dashed border-stone-200 rounded-3xl bg-white/40">
+        <div class="anim-fade-up text-center py-20 border-2 border-dashed border-stone-200 rounded-3xl bg-white/40 max-w-lg mx-auto">
             <i class="fa-regular fa-images text-stone-300 text-5xl mb-4"></i>
             <p class="text-stone-500 font-medium">Henüz paylaşım yok.</p>
             <p class="text-stone-400 text-sm mt-1">Kamera ikonuna dokunup ilk anlık paylaşımı sen yap.</p>
         </div>
         {% else %}
-        <div class="stagger flex flex-col gap-6" id="feed-list">
+        <div class="stagger columns-1 md:columns-2 xl:columns-3 gap-6" id="feed-list">
             {% for post in posts %}
-            <div class="anim-pin bg-white rounded-2xl shadow-sm border border-[var(--line)] overflow-hidden" data-post-id="{{ post.id }}">
+            <div class="anim-pin bg-white rounded-2xl shadow-sm border border-[var(--line)] overflow-hidden mb-6 break-inside-avoid" data-post-id="{{ post.id }}">
                 <div class="flex items-center justify-between px-4 py-3">
                     <div class="flex items-center gap-2.5">
                         <span class="h-8 w-8 rounded-full inline-flex items-center justify-center text-white text-xs font-bold shrink-0"
