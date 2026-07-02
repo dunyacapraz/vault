@@ -1423,9 +1423,40 @@ def feed_upload():
     user = current_user()
     file = request.files.get('file')
     caption = (request.form.get('caption') or '').strip()
+    has_file = bool(file and file.filename != '')
 
-    if not file or file.filename == '':
-        return jsonify({"status": "error", "message": "Dosya seçilmedi"}), 400
+    if not has_file:
+        if not caption:
+            return jsonify({"status": "error", "message": "Bir fotoğraf/video seç ya da bir şeyler yaz"}), 400
+        if len(caption) > 300:
+            return jsonify({"status": "error", "message": "Yazı çok uzun"}), 400
+
+        post_id = uuid.uuid4().hex[:12]
+        post = {
+            "id": post_id,
+            "filename": None,
+            "type": "text",
+            "caption": caption,
+            "posted_by": user['username'],
+            "created_at": datetime.utcnow().isoformat(),
+            "likes": [],
+            "comments": [],
+        }
+
+        posts = load_feed()
+        posts.append(post)
+        save_feed(posts)
+
+        try:
+            notify(
+                {"title": "✨ Yeni paylaşım", "body": f"{user['name']}: \"{caption}\"", "url": "/feed", "tag": f"feed-{post_id}"},
+                exclude_username=user['username'],
+            )
+        except Exception as e:
+            print(f"[PUSH GÖNDERİM HATASI] {e}")
+
+        return jsonify({"status": "success", "post": post})
+
     if not allowed_file(file.filename):
         return jsonify({"status": "error", "message": "Geçersiz dosya formatı"}), 400
     if len(caption) > 300:
