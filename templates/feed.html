@@ -56,9 +56,9 @@
             <p class="text-stone-400 text-sm mt-1">Kamera ikonuna dokunup ilk anlık paylaşımı sen yap.</p>
         </div>
         {% else %}
-        <div class="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start" id="feed-list">
+        <div class="stagger columns-1 md:columns-2 xl:columns-3 gap-6" id="feed-list">
             {% for post in posts %}
-            <div class="anim-pin bg-white rounded-2xl shadow-sm border border-[var(--line)] overflow-hidden" data-post-id="{{ post.id }}">
+            <div class="anim-pin bg-white rounded-2xl shadow-sm border border-[var(--line)] overflow-hidden mb-6 break-inside-avoid" data-post-id="{{ post.id }}">
                 <div class="flex items-center justify-between px-4 py-3">
                     <div class="flex items-center gap-2.5">
                         <span class="h-8 w-8 rounded-full inline-flex items-center justify-center text-white text-xs font-bold shrink-0"
@@ -81,11 +81,12 @@
                     <p class="text-lg leading-relaxed whitespace-pre-wrap break-words" style="color: var(--ink);">{{ post.caption }}</p>
                 </div>
                 {% else %}
-                <div class="bg-stone-100 flex items-center justify-center max-h-[34rem] overflow-hidden">
+                <div class="bg-stone-100 flex items-center justify-center overflow-hidden">
                     {% if post.type == 'video' %}
-                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-auto max-h-[34rem] object-contain" controls></video>
+                    <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-auto max-h-[36rem] object-contain" controls></video>
                     {% else %}
-                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-auto max-h-[34rem] object-contain" loading="lazy">
+                    <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-auto max-h-[36rem] object-contain cursor-zoom-in" loading="lazy"
+                         onclick="openFeedLightbox('/uploads/{{ post.id }}/{{ post.filename }}')">
                     {% endif %}
                 </div>
                 {% endif %}
@@ -148,11 +149,41 @@
         </div>
         {% endif %}
     </main>
+
+    <!-- Fotoğrafı tam boyutta gösteren lightbox -->
+    <div id="feed-lightbox" onclick="closeFeedLightbox()"
+         class="hidden fixed inset-0 z-50 bg-black/90 items-center justify-center p-4 cursor-zoom-out">
+        <button onclick="closeFeedLightbox()" type="button"
+                class="btn-press absolute top-4 right-4 h-11 w-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors">
+            <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+        <img id="feed-lightbox-img" src="" alt="" class="max-w-full max-h-full object-contain rounded-lg" onclick="event.stopPropagation()">
+    </div>
     </div>
 </div>
 
 <script>
     const CURRENT_USER = "{{ user.username }}";
+
+    function openFeedLightbox(url) {
+        const lightbox = document.getElementById('feed-lightbox');
+        document.getElementById('feed-lightbox-img').src = url;
+        lightbox.classList.remove('hidden');
+        lightbox.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeFeedLightbox() {
+        const lightbox = document.getElementById('feed-lightbox');
+        lightbox.classList.add('hidden');
+        lightbox.classList.remove('flex');
+        document.getElementById('feed-lightbox-img').src = '';
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeFeedLightbox();
+    });
     const USERS_MAP = {{ users|tojson }};
     let feedSelectedFile = null;
 
