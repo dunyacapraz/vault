@@ -6,6 +6,8 @@ import zipfile
 import tempfile
 import subprocess
 import re
+import threading
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -406,6 +408,73 @@ def send_push_notification(payload, exclude_username=None, only_username=None):
 
     if changed:
         save_push_subscriptions(subs)
+
+
+def check_event_reminders():
+    """Yaklaşan etkinliklere 1 gün ve 3 saat kala tüm üyelere bir kez bildirim
+    gönderir. Her etkinlikte 'notified_1d' / 'notified_3h' bayrakları tutularak
+    aynı bildirimin tekrar tekrar gönderilmesi engellenir."""
+    events = load_events()
+    if not events:
+        return
+
+    now = datetime.now()
+    changed = False
+
+    for ev in events:
+        dt = event_datetime(ev)
+        if not dt:
+            continue
+        diff = dt - now
+        if diff.total_seconds() <= 0:
+            continue  # etkinlik zaten geçmiş
+
+        if not ev.get('notified_1d') and diff <= timedelta(hours=24):
+            try:
+                notify({
+                    "title": "⏰ Yarın!",
+                    "body": f"\"{ev.get('title', 'Etkinlik')}\" etkinliğine 1 gün kaldı",
+                    "url": "/events",
+                    "tag": f"event-1d-{ev['id']}",
+                })
+            except Exception as e:
+                print(f"[HATIRLATMA PUSH HATASI] {e}")
+            ev['notified_1d'] = True
+            changed = True
+
+        if not ev.get('notified_3h') and diff <= timedelta(hours=3):
+            try:
+                notify({
+                    "title": "⏰ Yaklaşıyor!",
+                    "body": f"\"{ev.get('title', 'Etkinlik')}\" etkinliğine 3 saat kaldı",
+                    "url": "/events",
+                    "tag": f"event-3h-{ev['id']}",
+                })
+            except Exception as e:
+                print(f"[HATIRLATMA PUSH HATASI] {e}")
+            ev['notified_3h'] = True
+            changed = True
+
+    if changed:
+        save_events(events)
+
+
+def _event_reminder_loop():
+    while True:
+        try:
+            check_event_reminders()
+        except Exception as e:
+            print(f"[HATIRLATMA DÖNGÜSÜ HATASI] {e}")
+        time.sleep(300)  # 5 dakikada bir kontrol et
+
+
+def start_event_reminder_thread():
+    # Flask'ın debug reloader'ı ile geliştirme ortamında sürecin iki kez
+    # başlamasını (ve bildirimin iki kez gitmesini) önlemek için kontrol.
+    if app.debug and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        return
+    t = threading.Thread(target=_event_reminder_loop, daemon=True)
+    t.start()
 
 
 def load_notifications():
@@ -1894,3 +1963,8 @@ def serve_file(trip_id, filename):
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
+# Gunicorn (Render vb.) modülü sadece import eder, __main__ bloğu çalışmaz;
+# bu yüzden hatırlatma döngüsünü modül import edilir edilmez, dosyanın en
+# sonunda (tüm fonksiyonlar tanımlandıktan sonra) başlatıyoruz.
+start_event_reminder_thread()
