@@ -17,24 +17,31 @@
                 <p class="text-xs text-stone-500 mt-0.5">Herkesin anlık paylaşımları</p>
             </div>
         </div>
-        <button onclick="document.getElementById('feed-file-input').click()"
-                class="btn-press fab-amber text-white h-10 w-10 sm:w-auto sm:px-4 rounded-lg flex items-center justify-center gap-2 font-medium shadow-md hover:brightness-105 transition-all shrink-0">
-            <i class="fa-solid fa-camera"></i>
-            <span class="hidden sm:inline">Paylaş</span>
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+            <button onclick="openFeedTextCompose()"
+                    class="btn-press h-10 w-10 sm:w-auto sm:px-4 rounded-lg flex items-center justify-center gap-2 font-medium border border-[var(--line)] text-stone-600 hover:bg-stone-100 transition-all">
+                <i class="fa-solid fa-pen"></i>
+                <span class="hidden sm:inline">Yazı</span>
+            </button>
+            <button onclick="document.getElementById('feed-file-input').click()"
+                    class="btn-press fab-amber text-white h-10 w-10 sm:w-auto sm:px-4 rounded-lg flex items-center justify-center gap-2 font-medium shadow-md hover:brightness-105 transition-all">
+                <i class="fa-solid fa-camera"></i>
+                <span class="hidden sm:inline">Paylaş</span>
+            </button>
+        </div>
         <input type="file" id="feed-file-input" class="hidden" accept="image/*,video/*" onchange="handleFeedFileSelected(this.files)">
     </header>
 
     <main class="px-4 sm:px-8 py-6 max-w-lg mx-auto">
         <!-- Yükleme öncesi önizleme / açıklama kutusu -->
         <div id="feed-compose" class="hidden anim-fade-up mb-6 bg-white rounded-2xl shadow-sm border border-[var(--line)] p-4">
-            <div class="rounded-xl overflow-hidden bg-stone-100 mb-3 max-h-72 flex items-center justify-center">
+            <div id="feed-compose-media-wrap" class="rounded-xl overflow-hidden bg-stone-100 mb-3 max-h-72 flex items-center justify-center">
                 <img id="feed-compose-preview-img" class="max-w-full max-h-72 object-contain hidden" alt="">
                 <video id="feed-compose-preview-video" class="max-w-full max-h-72 object-contain hidden" muted controls></video>
             </div>
             <textarea id="feed-compose-caption" rows="2" maxlength="300" placeholder="Bir şey yaz... (isteğe bağlı)"
                 class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none resize-none text-sm"></textarea>
-            <p class="text-[11px] text-stone-400 mt-1.5">Fotoğraf (en fazla 10MB) veya video (en fazla 50MB, büyükse otomatik küçültülür) paylaşabilirsin.</p>
+            <p id="feed-compose-hint" class="text-[11px] text-stone-400 mt-1.5">Fotoğraf (en fazla 10MB) veya video (en fazla 50MB, büyükse otomatik küçültülür) paylaşabilirsin.</p>
             <div id="feed-upload-progress" class="hidden mt-3">
                 <div class="h-1.5 bg-stone-200 rounded-full overflow-hidden">
                     <div id="feed-upload-bar" class="h-full fab-amber transition-all duration-300" style="width:0%"></div>
@@ -73,6 +80,11 @@
                     </button>
                     {% endif %}
                 </div>
+                {% if post.type == 'text' %}
+                <div class="px-5 py-7 bg-gradient-to-br from-amber-50 to-stone-50">
+                    <p class="text-lg text-stone-800 leading-relaxed whitespace-pre-wrap break-words">{{ post.caption }}</p>
+                </div>
+                {% else %}
                 <div class="bg-stone-100 flex items-center justify-center max-h-[34rem] overflow-hidden">
                     {% if post.type == 'video' %}
                     <video src="/uploads/{{ post.id }}/{{ post.filename }}" class="w-full h-auto max-h-[34rem] object-contain" controls></video>
@@ -80,6 +92,7 @@
                     <img src="/uploads/{{ post.id }}/{{ post.filename }}" alt="" class="w-full h-auto max-h-[34rem] object-contain" loading="lazy">
                     {% endif %}
                 </div>
+                {% endif %}
                 <div class="px-4 py-3">
                     <div class="flex items-center gap-4">
                         <button onclick="toggleFeedLike('{{ post.id }}')" class="feed-like-btn flex items-center gap-1.5 text-sm text-stone-500 hover:text-red-500 transition-colors">
@@ -91,7 +104,7 @@
                             <span class="feed-comment-count">{{ post.get('comments', [])|length }}</span>
                         </button>
                     </div>
-                    {% if post.caption %}
+                    {% if post.caption and post.type != 'text' %}
                     <p class="text-sm text-stone-700 mt-2"><span class="font-semibold">{{ users.get(post.posted_by, {}).get('name', post.posted_by) }}</span> {{ post.caption }}</p>
                     {% endif %}
 
@@ -146,14 +159,23 @@
     const CURRENT_USER = "{{ user.username }}";
     const USERS_MAP = {{ users|tojson }};
     let feedSelectedFile = null;
+    let feedComposeMode = 'media';
 
     function handleFeedFileSelected(files) {
         if (!files.length) return;
         feedSelectedFile = files[0];
+        feedComposeMode = 'media';
         const compose = document.getElementById('feed-compose');
+        const mediaWrap = document.getElementById('feed-compose-media-wrap');
         const imgPreview = document.getElementById('feed-compose-preview-img');
         const videoPreview = document.getElementById('feed-compose-preview-video');
+        const caption = document.getElementById('feed-compose-caption');
+        const hint = document.getElementById('feed-compose-hint');
         const url = URL.createObjectURL(feedSelectedFile);
+
+        mediaWrap.classList.remove('hidden');
+        caption.placeholder = 'Bir şey yaz... (isteğe bağlı)';
+        hint.textContent = 'Fotoğraf (en fazla 10MB) veya video (en fazla 50MB, büyükse otomatik küçültülür) paylaşabilirsin.';
 
         if (feedSelectedFile.type.startsWith('video/')) {
             videoPreview.src = url;
@@ -168,23 +190,50 @@
         compose.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    function openFeedTextCompose() {
+        feedSelectedFile = null;
+        feedComposeMode = 'text';
+        document.getElementById('feed-file-input').value = '';
+        document.getElementById('feed-compose-media-wrap').classList.add('hidden');
+        document.getElementById('feed-compose-preview-img').classList.add('hidden');
+        document.getElementById('feed-compose-preview-video').classList.add('hidden');
+        document.getElementById('feed-compose-hint').textContent = 'Fotoğraf ya da video eklemeden sadece yazı olarak paylaşabilirsin.';
+        const caption = document.getElementById('feed-compose-caption');
+        caption.placeholder = 'Ne düşünüyorsun?';
+        const compose = document.getElementById('feed-compose');
+        compose.classList.remove('hidden');
+        compose.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        caption.focus();
+    }
+
     function cancelFeedCompose() {
         feedSelectedFile = null;
+        feedComposeMode = 'media';
         document.getElementById('feed-compose').classList.add('hidden');
         document.getElementById('feed-compose-caption').value = '';
         document.getElementById('feed-file-input').value = '';
         document.getElementById('feed-upload-progress').classList.add('hidden');
+        document.getElementById('feed-compose-media-wrap').classList.remove('hidden');
     }
 
     async function submitFeedPost() {
-        if (!feedSelectedFile) return;
+        const caption = document.getElementById('feed-compose-caption').value.trim();
+
+        if (feedComposeMode === 'text') {
+            if (!caption) {
+                showToast('Bir şeyler yaz', 'error');
+                return;
+            }
+        } else if (!feedSelectedFile) {
+            return;
+        }
+
         const btn = document.getElementById('feed-post-btn');
         const progressWrap = document.getElementById('feed-upload-progress');
         const bar = document.getElementById('feed-upload-bar');
-        const caption = document.getElementById('feed-compose-caption').value.trim();
 
         const formData = new FormData();
-        formData.append('file', feedSelectedFile);
+        if (feedSelectedFile) formData.append('file', feedSelectedFile);
         formData.append('caption', caption);
 
         btn.disabled = true;
