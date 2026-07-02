@@ -66,18 +66,18 @@
             <p class="text-stone-400 text-sm mt-1">İlk fotoğrafı veya videoyu yukarıdan ekle.</p>
         </div>
         {% else %}
-        <div class="stagger grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5" id="gallery">
+        <div class="stagger columns-2 sm:columns-3 lg:columns-4 gap-5" id="gallery">
             {% for item in media %}
-            <div class="polaroid anim-pin bg-white p-2 pb-3 rounded-lg shadow-sm border border-[var(--line)] cursor-pointer"
+            <div class="polaroid anim-pin bg-white p-2 pb-3 rounded-lg shadow-sm border border-[var(--line)] cursor-pointer mb-5 break-inside-avoid inline-block w-full"
                  onclick="openLightbox({{ loop.index0 }})">
-                <div class="relative aspect-square bg-stone-200 rounded overflow-hidden">
+                <div class="relative bg-stone-200 rounded overflow-hidden">
                     {% if item.type == 'video' %}
-                    <video src="/uploads/{{ trip.id }}/{{ item.filename }}" class="w-full h-full object-cover object-top" muted></video>
+                    <video src="/uploads/{{ trip.id }}/{{ item.filename }}" class="w-full h-auto block" muted></video>
                     <div class="absolute inset-0 flex items-center justify-center bg-black/20">
                         <i class="fa-solid fa-circle-play text-white text-2xl drop-shadow"></i>
                     </div>
                     {% else %}
-                    <img src="/uploads/{{ trip.id }}/{{ item.filename }}" alt="" class="w-full h-full object-cover object-top">
+                    <img src="/uploads/{{ trip.id }}/{{ item.filename }}" alt="" class="w-full h-auto block">
                     {% endif %}
                 </div>
                 <div class="flex items-center justify-between mt-2 px-0.5">
