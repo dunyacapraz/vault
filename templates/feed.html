@@ -77,8 +77,8 @@
                     {% endif %}
                 </div>
                 {% if post.type == 'text' %}
-                <div class="px-5 py-7 bg-gradient-to-br from-amber-50 to-stone-50">
-                    <p class="text-lg text-stone-800 leading-relaxed whitespace-pre-wrap break-words">{{ post.caption }}</p>
+                <div class="px-5 py-7" style="background-color: var(--surface);">
+                    <p class="text-lg leading-relaxed whitespace-pre-wrap break-words" style="color: var(--ink);">{{ post.caption }}</p>
                 </div>
                 {% else %}
                 <div class="bg-stone-100 flex items-center justify-center max-h-[34rem] overflow-hidden">
