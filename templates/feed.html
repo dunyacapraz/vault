@@ -97,7 +97,7 @@
 
                     <div class="feed-comments-section comments-collapse mt-1">
                         <div>
-                            <div class="pt-3 border-t border-[var(--line)]">
+                            <div class="pt-3 pb-1 border-t border-[var(--line)]">
                                 <div class="feed-comments-list space-y-2.5 mb-3 max-h-52 overflow-y-auto pr-1">
                                     {% for c in post.get('comments', []) %}
                                     <div class="flex items-start gap-2" data-comment-id="{{ c.id }}">
@@ -122,8 +122,8 @@
                                     <p class="feed-no-comments text-xs text-stone-400 text-center py-2">Henüz yorum yok, ilk yorumu sen yaz!</p>
                                     {% endfor %}
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <input type="text" class="feed-comment-input flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none text-sm"
+                                <div class="flex items-center gap-2 p-0.5 -m-0.5">
+                                    <input type="text" class="feed-comment-input flex-1 px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] outline-none text-sm"
                                            placeholder="Yorum yaz..." maxlength="500"
                                            onkeydown="if(event.key==='Enter'){submitFeedComment('{{ post.id }}')}">
                                     <button onclick="submitFeedComment('{{ post.id }}')" class="feed-comment-send btn-press fab-amber text-white h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
