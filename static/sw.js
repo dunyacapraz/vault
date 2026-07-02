@@ -25,7 +25,12 @@ self.addEventListener('push', (event) => {
         badge: '/static/icons/icon-192.png',
         data: { url: data.url || '/' },
         tag: data.tag || undefined,
+        renotify: !!data.tag,
+        vibrate: [80, 40, 80],
     };
+    if (data.image) {
+        options.image = data.image;
+    }
 
     event.waitUntil(self.registration.showNotification(title, options));
 });
