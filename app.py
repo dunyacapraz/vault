@@ -893,6 +893,59 @@ def admin_page():
                             events=events, referral_code=REFERRAL_CODE)
 
 
+@app.route('/api/admin/notifications/send', methods=['POST'])
+@admin_required
+def admin_send_notification():
+    data = request.get_json() or {}
+    mode = data.get('mode', 'custom')
+
+    if mode == 'event':
+        event_id = data.get('event_id')
+        events = load_events()
+        ev = next((e for e in events if e['id'] == event_id), None)
+        if not ev:
+            return jsonify({"status": "error", "message": "Etkinlik bulunamadı"}), 404
+
+        dt = event_datetime(ev)
+        if dt:
+            now = datetime.now()
+            diff = dt - now
+            if diff.total_seconds() <= 0:
+                remaining = "başladı/geçti"
+            else:
+                days = diff.days
+                hours = diff.seconds // 3600
+                if days > 0:
+                    remaining = f"{days} gün {hours} saat kaldı"
+                elif hours > 0:
+                    remaining = f"{hours} saat kaldı"
+                else:
+                    minutes = (diff.seconds % 3600) // 60
+                    remaining = f"{minutes} dakika kaldı"
+        else:
+            remaining = ""
+
+        title = "⏰ Etkinlik Hatırlatması"
+        body = f"\"{ev.get('title', 'Etkinlik')}\"" + (f" — {remaining}" if remaining else "")
+        if ev.get('location'):
+            body += f" · {ev['location']}"
+        url = "/events"
+    else:
+        title = (data.get('title') or '').strip()
+        body = (data.get('body') or '').strip()
+        url = (data.get('url') or '/').strip()
+        if not title or not body:
+            return jsonify({"status": "error", "message": "Başlık ve mesaj gerekli"}), 400
+
+    try:
+        notify({"title": title, "body": body, "url": url, "tag": f"admin-manual-{uuid.uuid4().hex[:8]}"})
+    except Exception as e:
+        print(f"[ADMIN BİLDİRİM HATASI] {e}")
+        return jsonify({"status": "error", "message": "Bildirim gönderilemedi"}), 500
+
+    return jsonify({"status": "success", "title": title, "body": body})
+
+
 @app.route('/api/admin/users/<username>/delete', methods=['POST'])
 @admin_required
 def admin_delete_user(username):
