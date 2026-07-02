@@ -120,6 +120,53 @@
         </section>
 
         <!-- Etkinlikler -->
+        <section class="anim-fade-up bg-white border border-[var(--line)] rounded-2xl p-6">
+            <h2 class="font-display text-lg font-semibold mb-1">Manuel Bildirim Gönder</h2>
+            <p class="text-sm text-stone-500 mb-4">Tüm üyelere anında push bildirimi gönder — yaklaşan bir etkinliği hatırlat ya da kendi mesajını yaz.</p>
+
+            <div class="flex gap-2 mb-4">
+                <button type="button" onclick="switchNotifyMode('event')" id="notify-mode-event-btn"
+                    class="btn-press flex-1 text-sm font-medium px-4 py-2 rounded-lg border border-stone-300">
+                    <i class="fa-solid fa-calendar-star mr-1.5"></i> Etkinlik Hatırlat
+                </button>
+                <button type="button" onclick="switchNotifyMode('custom')" id="notify-mode-custom-btn"
+                    class="btn-press flex-1 text-sm font-medium px-4 py-2 rounded-lg border border-stone-300">
+                    <i class="fa-regular fa-comment mr-1.5"></i> Özel Mesaj
+                </button>
+            </div>
+
+            <div id="notify-mode-event" class="space-y-3">
+                <div>
+                    <label class="block text-sm font-semibold text-stone-700 mb-1">Etkinlik seç</label>
+                    <select id="notify-event-select" class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] outline-none text-sm">
+                        <option value="">— Etkinlik seç —</option>
+                        {% for ev in events %}
+                        <option value="{{ ev.id }}">{{ ev.title }} ({{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button onclick="sendManualNotification()" id="notify-send-btn-event" class="btn-press fab-amber text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:brightness-105 transition-all">
+                    <i class="fa-solid fa-paper-plane mr-1.5"></i> Hatırlatmayı Gönder
+                </button>
+            </div>
+
+            <div id="notify-mode-custom" class="space-y-3 hidden">
+                <div>
+                    <label class="block text-sm font-semibold text-stone-700 mb-1">Başlık</label>
+                    <input type="text" id="notify-custom-title" maxlength="60" placeholder="örn. 📢 Duyuru"
+                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] outline-none text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-stone-700 mb-1">Mesaj</label>
+                    <textarea id="notify-custom-body" rows="2" maxlength="200" placeholder="Herkese iletmek istediğin mesaj..."
+                        class="w-full px-3 py-2.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] outline-none text-sm resize-none"></textarea>
+                </div>
+                <button onclick="sendManualNotification()" id="notify-send-btn-custom" class="btn-press fab-amber text-white px-5 py-2.5 rounded-lg font-medium shadow-md hover:brightness-105 transition-all">
+                    <i class="fa-solid fa-paper-plane mr-1.5"></i> Bildirimi Gönder
+                </button>
+            </div>
+        </section>
+
         <section class="anim-fade-up">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="font-display text-lg font-semibold">Etkinlikler <span class="text-stone-400 font-normal text-sm">({{ events|length }})</span></h2>
@@ -141,6 +188,9 @@
                             <td class="px-4 py-3 text-stone-500">{{ ev.date }}{% if ev.time %} · {{ ev.time }}{% endif %}</td>
                             <td class="px-4 py-3 font-mono text-stone-500">@{{ ev.created_by }}</td>
                             <td class="px-4 py-3 text-right">
+                                <button onclick="sendEventReminder('{{ ev.id }}', '{{ ev.title|e }}', this)" class="btn-press text-xs text-[var(--amber-deep)] hover:bg-stone-100 px-2.5 py-1.5 rounded-lg" title="Bu etkinlik için hatırlatma bildirimi gönder">
+                                    <i class="fa-solid fa-bell"></i>
+                                </button>
                                 <button onclick="deleteEventAdmin('{{ ev.id }}')" class="btn-press text-xs text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded-lg" title="Etkinliği sil">
                                     <i class="fa-regular fa-trash-can"></i>
                                 </button>
@@ -239,6 +289,99 @@
             }
         } catch (err) {
             showToast('Bağlantı hatası', 'error');
+        }
+    }
+
+    // --- Manuel bildirim gönderme ---
+    let notifyMode = 'event';
+
+    function switchNotifyMode(mode) {
+        notifyMode = mode;
+        document.getElementById('notify-mode-event').classList.toggle('hidden', mode !== 'event');
+        document.getElementById('notify-mode-custom').classList.toggle('hidden', mode !== 'custom');
+        const eventBtn = document.getElementById('notify-mode-event-btn');
+        const customBtn = document.getElementById('notify-mode-custom-btn');
+        eventBtn.classList.toggle('fab-amber', mode === 'event');
+        eventBtn.classList.toggle('text-white', mode === 'event');
+        eventBtn.classList.toggle('border-transparent', mode === 'event');
+        customBtn.classList.toggle('fab-amber', mode === 'custom');
+        customBtn.classList.toggle('text-white', mode === 'custom');
+        customBtn.classList.toggle('border-transparent', mode === 'custom');
+    }
+    switchNotifyMode('event');
+
+    async function sendManualNotification() {
+        const btn = document.getElementById(notifyMode === 'event' ? 'notify-send-btn-event' : 'notify-send-btn-custom');
+        let payload;
+
+        if (notifyMode === 'event') {
+            const select = document.getElementById('notify-event-select');
+            if (!select.value) {
+                showToast('Önce bir etkinlik seç', 'error');
+                return;
+            }
+            payload = { mode: 'event', event_id: select.value };
+        } else {
+            const title = document.getElementById('notify-custom-title').value.trim();
+            const body = document.getElementById('notify-custom-body').value.trim();
+            if (!title || !body) {
+                showToast('Başlık ve mesaj gerekli', 'error');
+                return;
+            }
+            payload = { mode: 'custom', title, body };
+        }
+
+        btn.disabled = true;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+
+        try {
+            const res = await fetch('/api/admin/notifications/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast('Bildirim gönderildi: ' + data.title, 'success');
+                if (notifyMode === 'custom') {
+                    document.getElementById('notify-custom-title').value = '';
+                    document.getElementById('notify-custom-body').value = '';
+                } else {
+                    document.getElementById('notify-event-select').value = '';
+                }
+            } else {
+                showToast(data.message || 'Gönderilemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+
+    async function sendEventReminder(eventId, eventTitle, btn) {
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner inline-block align-middle"></span>';
+        try {
+            const res = await fetch('/api/admin/notifications/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'event', event_id: eventId }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`"${eventTitle}" için hatırlatma gönderildi`, 'success');
+            } else {
+                showToast(data.message || 'Gönderilemedi', 'error');
+            }
+        } catch (err) {
+            showToast('Bağlantı hatası', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
         }
     }
 </script>
