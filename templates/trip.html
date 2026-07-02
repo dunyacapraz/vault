@@ -180,9 +180,9 @@
         </div>
 
         <!-- Yorumlar -->
-        <div class="w-full max-w-xl bg-white/95 rounded-2xl mt-3 max-h-[26vh] flex flex-col overflow-hidden">
+        <div class="w-full max-w-xl lightbox-comments-panel rounded-2xl mt-3 max-h-[26vh] flex flex-col overflow-hidden shadow-xl">
             <div id="lightbox-comments" class="overflow-y-auto px-4 py-3 space-y-3 text-sm"></div>
-            <div class="border-t border-[var(--line)] p-3 flex items-center gap-2">
+            <div class="border-t border-stone-200 p-3 flex items-center gap-2">
                 <input id="lightbox-comment-input" type="text" maxlength="500" placeholder="Bir yorum yaz..."
                     class="flex-1 px-3 py-2 text-sm border border-stone-300 rounded-lg focus:ring-2 focus:ring-[var(--amber)] focus:border-[var(--amber)] outline-none">
                 <button onclick="submitComment()" class="btn-press fab-amber text-white h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
@@ -190,6 +190,24 @@
                 </button>
             </div>
         </div>
+
+        <style>
+            /* Lightbox her zaman koyu bir arka plan üstünde açıldığı için, yorum
+               panelinin okunaklı olması adına tema modundan bağımsız hep açık
+               (light) kalmasını sağlıyoruz. */
+            .lightbox-comments-panel { background: rgba(255,255,255,.98) !important; color: #131316; }
+            .lightbox-comments-panel input,
+            .lightbox-comments-panel textarea { background: #fff !important; color: #131316 !important; }
+            .lightbox-comments-panel ::placeholder { color: #a8a29e !important; }
+            .lightbox-comments-panel .border-stone-200,
+            .lightbox-comments-panel .border-stone-300 { border-color: #e7e5e4 !important; }
+            .lightbox-comments-panel .text-stone-400 { color: #a8a29e !important; }
+            .lightbox-comments-panel .text-stone-500 { color: #78716c !important; }
+            .lightbox-comments-panel .text-stone-600 { color: #57534e !important; }
+            .lightbox-comments-panel .text-stone-700 { color: #44403c !important; }
+            .lightbox-comments-panel .text-stone-800 { color: #292524 !important; }
+            .lightbox-comments-panel .bg-stone-100 { background-color: #f5f5f4 !important; }
+        </style>
     </div>
 </div>
 {% endblock %}
